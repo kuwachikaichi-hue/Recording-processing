@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Voice Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Voice Studio — design tokens
+   ============================================================ */
+:root{
+  --bg:            #0A0D12;
+  --surface:       #12151C;
+  --surface-2:     #1B1F29;
+  --surface-3:     #232837;
+  --border:        #262B36;
+  --border-soft:   #1D212B;
+  --text:          #EDEFF2;
+  --text-dim:      #8B92A3;
+  --text-faint:    #565D6C;
+  --accent:        #6C5CE7;
+  --accent-soft:   rgba(108,92,231,0.16);
+  --accent-2:      #2DD4BF;
+  --amber:         #F0A93E;
+  --danger:        #FF4B5C;
+  --danger-soft:   rgba(255,75,92,0.16);
+  --track-voice:   #6C5CE7;
+  --track-bgm:     #2DD4BF;
+  --track-se:      #F0A93E;
+  --font-display:  'Space Grotesk', 'Hiragino Sans', sans-serif;
+  --font-body:     'Inter', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --font-mono:     'JetBrains Mono', monospace;
+  --radius-s:      8px;
+  --radius-m:      14px;
+  --radius-l:      20px;
+  --icon-size:     44px;
+  --timeline-h:    96px;
+  --shadow-panel:  0 20px 60px rgba(0,0,0,0.45);
+  --nav-h:         64px;
+}
+[data-theme="light"]{
+  --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#F0F1F4; --surface-3:#E7E9EE;
+  --border:#DFE2E8; --border-soft:#EAECF0; --text:#14161B; --text-dim:#666D7C; --text-faint:#9AA1AF;
+}
+[data-theme="oled"]{ --bg:#000000; --surface:#000000; --surface-2:#0A0A0C; --surface-3:#141417; --border:#1B1B1F; }
+[data-theme="purple"]{ --accent:#9B5CF6; --track-voice:#9B5CF6; }
+[data-theme="blue"]{ --accent:#3B82F6; --track-voice:#3B82F6; }
+[data-theme="red"]{ --accent:#EF4444; --track-voice:#EF4444; }
+[data-theme="pink"]{ --accent:#EC4899; --track-voice:#EC4899; }
+[data-theme="green"]{ --accent:#22C55E; --track-voice:#22C55E; }
+[data-theme="orange"]{ --accent:#F97316; --track-voice:#F97316; }
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--font-body); overflow:hidden; user-select:none;
+  transition:background .25s ease, color .25s ease;
+}
+button{font-family:inherit; color:inherit;}
+::-webkit-scrollbar{height:8px; width:8px;}
+::-webkit-scrollbar-thumb{background:var(--surface-3); border-radius:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+#app{position:relative; width:100vw; height:100vh; overflow:hidden;}
+
+/* ---------- logo mark (signature) ---------- */
+.vs-mark{
+  width:34px; height:34px; border-radius:10px; flex:none;
+  background:linear-gradient(155deg, var(--accent), #4834C7);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(108,92,231,0.35);
+}
+.vs-mark svg{width:19px; height:19px;}
+@keyframes vsBreathe{0%,100%{transform:scale(1); box-shadow:0 4px 14px rgba(108,92,231,0.35);}50%{transform:scale(1.09); box-shadow:0 6px 20px rgba(108,92,231,0.55);}}
+.vs-mark.idle{animation:vsBreathe 3.4s ease-in-out infinite;}
+body.no-motion .vs-mark.idle{animation:none;}
+@keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+.empty-state svg.idle{animation:floaty 3.8s ease-in-out infinite;}
+body.no-motion .empty-state svg.idle{animation:none;}
+@keyframes pulseSoft{0%,100%{opacity:1;}50%{opacity:.55;}}
+
+/* ============================================================
+   TOP-LEVEL SCREENS (home / library / share / voiceproj / customize)
+   ============================================================ */
+.top-screen{position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg);}
+.top-screen.hidden{display:none;}
+.screen-header{display:flex; align-items:center; gap:10px; padding:18px 20px 10px; flex:none;}
+.screen-header .title{font-family:var(--font-display); font-weight:700; font-size:19px; letter-spacing:-0.01em;}
+.screen-header .spacer{flex:1;}
+.screen-scroll{flex:1; overflow-y:auto; padding:4px 20px calc(var(--nav-h) + 30px);}
+
+#screen-home{position:absolute; inset:0; display:flex; flex-direction:column; background:var(--bg);}
+#screen-home.hidden{display:none;}
+.home-header{display:flex; align-items:center; gap:10px; padding:18px 20px 10px;}
+.home-header .title{font-family:var(--font-display); font-weight:700; font-size:19px; letter-spacing:-0.01em;}
+.home-header .spacer{flex:1;}
+.icon-btn{
+  width:38px; height:38px; border-radius:50%; border:1px solid var(--border);
+  background:var(--surface-2); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:background .15s, transform .1s; flex:none;
+}
+.icon-btn:hover{background:var(--surface-3);}
+.icon-btn:active{transform:scale(0.92);}
+.icon-btn svg{width:18px; height:18px; stroke:var(--text-dim);}
+
+.search-bar{
+  margin:8px 20px 4px; display:flex; align-items:center; gap:10px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:999px;
+  padding:11px 16px; color:var(--text-faint); cursor:text;
+}
+.search-bar svg{width:16px; height:16px; stroke:var(--text-faint); flex:none;}
+.search-bar span{font-size:14px;}
+.search-bar kbd{
+  margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-faint);
+  border:1px solid var(--border); border-radius:5px; padding:2px 6px;
+}
+
+.home-actions{display:flex; gap:10px; padding:16px 20px 6px; overflow-x:auto;}
+.home-action{
+  flex:1; min-width:96px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-m); padding:16px 10px; display:flex; flex-direction:column; align-items:center; gap:8px;
+  cursor:pointer; transition:transform .12s ease, border-color .15s;
+}
+.home-action:hover{border-color:var(--accent); transform:translateY(-2px);}
+.home-action:active{transform:translateY(0) scale(.97);}
+.home-action .dot{
+  width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+}
+.home-action.record .dot{background:var(--danger-soft);}
+.home-action.record .dot svg{stroke:var(--danger);}
+.home-action.open .dot{background:var(--accent-soft);}
+.home-action.open .dot svg{stroke:var(--accent);}
+.home-action.new .dot{background:rgba(45,212,191,0.14);}
+.home-action.new .dot svg{stroke:var(--accent-2);}
+.home-action svg{width:20px; height:20px; fill:none; stroke-width:1.8;}
+.home-action span{font-size:12.5px; color:var(--text-dim); font-weight:500;}
+
+.section-label{padding:18px 20px 6px; font-size:13px; font-weight:600; color:var(--text-dim);}
+.project-list{flex:1; overflow-y:auto; padding:4px 20px calc(var(--nav-h) + 100px);}
+.project-row{
+  display:flex; align-items:center; gap:12px; padding:12px; border-radius:var(--radius-m);
+  cursor:pointer; transition:background .15s;
+}
+.project-row:hover{background:var(--surface-2);}
+.project-thumb{
+  width:52px; height:52px; border-radius:12px; flex:none; background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--border);
+  font-size:20px;
+}
+.project-thumb svg{width:22px; height:22px; stroke:var(--text-faint);}
+.project-meta{flex:1; min-width:0;}
+.project-meta .pname{font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.project-meta .psub{font-size:12px; color:var(--text-faint); margin-top:2px;}
+.project-row .more{width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-faint); flex:none;}
+.project-row .more:hover{background:var(--surface-3);}
+.project-row button.chip{flex:none;}
+
+.empty-state{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-faint); padding:40px 40px; text-align:center;}
+.empty-state svg{width:44px; height:44px; stroke:var(--text-faint); opacity:.6;}
+.empty-state b{color:var(--text-dim); font-size:14px; font-weight:600;}
+.empty-state p{font-size:12.5px; margin:0; line-height:1.5;}
+
+.fab{
+  position:absolute; right:20px; bottom:calc(var(--nav-h) + 20px); width:56px; height:56px; border-radius:50%;
+  background:linear-gradient(155deg, var(--accent), #4834C7); border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 10px 26px rgba(108,92,231,0.4);
+  transition:transform .12s; z-index:14;
+}
+.fab:hover{transform:scale(1.06);}
+.fab:active{transform:scale(.94);}
+.fab svg{width:24px; height:24px; stroke:#fff; stroke-width:2.2;}
+
+/* ============================================================
+   EDITOR SCREEN
+   ============================================================ */
+#screen-editor{position:absolute; inset:0; display:none; flex-direction:column; background:var(--bg);}
+#screen-editor.active{display:flex;}
+
+.tabbar{display:flex; align-items:center; gap:2px; background:var(--surface); border-bottom:1px solid var(--border-soft); padding:8px 8px 0; overflow-x:auto;}
+.ptab{
+  display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px 10px 0 0;
+  font-size:12.5px; color:var(--text-faint); cursor:pointer; white-space:nowrap; max-width:160px;
+  border:1px solid transparent;
+}
+.ptab.active{background:var(--bg); color:var(--text); border-color:var(--border-soft); border-bottom-color:var(--bg); font-weight:600;}
+.ptab span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.ptab .x{opacity:.5; font-size:11px;}
+.ptab .x:hover{opacity:1;}
+.ptab-add{padding:7px 10px; color:var(--text-faint); cursor:pointer; font-size:16px;}
+
+.editor-top{display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border-soft); background:var(--bg);}
+.editor-top .back{color:var(--text-dim); cursor:pointer; display:flex; align-items:center; gap:4px; font-size:12px;}
+.editor-top .pname-input{
+  background:transparent; border:none; color:var(--text); font-family:var(--font-display); font-weight:600;
+  font-size:15px; outline:none; max-width:220px;
+}
+.editor-top .spacer{flex:1;}
+.save-chip{
+  display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-faint);
+  padding:6px 10px; border-radius:999px; background:var(--surface-2); cursor:pointer; border:1px solid transparent;
+}
+.save-chip:hover{border-color:var(--accent);}
+.save-chip.saving{color:var(--accent-2);}
+.save-chip .dot2{width:6px; height:6px; border-radius:50%; background:var(--accent-2);}
+
+.transport{display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border-soft);}
+.tbtn{
+  width:38px; height:38px; border-radius:50%; border:1px solid var(--border); background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.tbtn:hover{background:var(--surface-3);}
+.tbtn.primary{background:var(--accent); border-color:var(--accent);}
+.tbtn.primary svg{stroke:#fff; fill:#fff;}
+.tbtn svg{width:15px; height:15px; stroke:var(--text-dim); fill:var(--text-dim);}
+.time-display{font-family:var(--font-mono); font-size:13px; color:var(--text-dim); min-width:112px;}
+.time-display b{color:var(--text);}
+.transport .spacer{flex:1;}
+.zoom-ctl{display:flex; align-items:center; gap:6px;}
+.zoom-ctl button{width:26px; height:26px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); cursor:pointer; color:var(--text-dim); font-size:14px;}
+
+.editor-body{flex:1; display:flex; overflow:hidden; position:relative;}
+.timeline-wrap{flex:1; overflow:auto; position:relative; background:
+  repeating-linear-gradient(90deg, transparent, transparent 49px, var(--border-soft) 49px, var(--border-soft) 50px);
+}
+.ruler{position:sticky; top:0; height:22px; background:var(--surface); border-bottom:1px solid var(--border-soft); z-index:5;}
+.tracks{position:relative;}
+.track-row{position:relative; border-bottom:1px solid var(--border-soft); background:var(--surface); }
+.track-head{
+  position:sticky; left:0; width:150px; height:100%; z-index:4; background:var(--surface);
+  border-right:1px solid var(--border-soft); display:flex; flex-direction:column; justify-content:center;
+  padding:8px 10px; gap:4px; float:left;
+}
+.track-head .tname{font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px;}
+.track-head .tname .sw{width:8px; height:8px; border-radius:2px;}
+.track-head .tctrls{display:flex; gap:4px; margin-top:2px;}
+.tmini{width:20px; height:20px; border-radius:5px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; color:var(--text-faint); border:1px solid var(--border);}
+.tmini.on{background:var(--accent-soft); color:var(--accent); border-color:var(--accent);}
+.track-vol{display:flex; align-items:center; gap:4px; margin-top:3px;}
+.track-vol span{font-size:9px; color:var(--text-faint); flex:none;}
+.track-vol input[type=range]{width:70px; height:3px; margin:0;}
+.track-lane{position:relative; height:100%; min-height:100%;}
+.clip{
+  position:absolute; top:6px; bottom:6px; border-radius:8px; overflow:hidden; cursor:grab;
+  border:1.5px solid transparent; background:var(--surface-3); touch-action:none;
+}
+.clip:active{cursor:grabbing;}
+.clip.selected{border-color:#fff; box-shadow:0 0 0 1px var(--accent);}
+.clip canvas{position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none;}
+.clip .cliplabel{position:absolute; top:2px; left:6px; font-size:9.5px; color:rgba(255,255,255,.85); font-weight:600; pointer-events:none; text-shadow:0 1px 2px rgba(0,0,0,.5); z-index:2;}
+.clip .handle{position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:3; touch-action:none;}
+.clip .handle.l{left:0;} .clip .handle.r{right:0;}
+.clip .fadeshape{position:absolute; top:0; bottom:0; width:40%; pointer-events:none; opacity:.55;}
+
+.playhead{position:absolute; top:0; bottom:0; width:2px; background:var(--danger); z-index:6; pointer-events:none;}
+.playhead::before{content:''; position:absolute; top:0; left:-5px; width:12px; height:12px; background:var(--danger); border-radius:3px 3px 3px 0; transform:rotate(45deg);}
+
+.dropzone-hint2{position:absolute; inset:0; z-index:9; display:flex; align-items:center; justify-content:center;
+  background:var(--accent-soft); border:2px dashed var(--accent); opacity:0; pointer-events:none; transition:opacity .15s;
+  font-weight:700; color:var(--accent); font-size:14px;}
+.dropzone-hint2.show{opacity:1;}
+
+/* bottom icon nav (editor-local, twitter-esque) */
+.bottom-nav{display:flex; align-items:stretch; border-top:1px solid var(--border-soft); background:var(--surface); flex:none;}
+.navbtn{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  padding:9px 4px 10px; cursor:pointer; color:var(--text-faint); position:relative; border:none; background:none;
+}
+.navbtn svg{width:var(--icon-size,22px); height:var(--icon-size,22px); max-width:23px; max-height:23px; stroke-width:1.8; fill:none;}
+.navbtn span{font-size:10.5px; font-weight:600;}
+.navbtn.active{color:var(--accent);}
+.navbtn.active svg{fill:var(--accent-soft);}
+.navbtn .rec-glow{position:absolute; top:2px; width:8px; height:8px; border-radius:50%; background:var(--danger); animation:pulse 1.4s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,75,92,.5);}70%{box-shadow:0 0 0 8px rgba(255,75,92,0);}100%{box-shadow:0 0 0 0 rgba(255,75,92,0);}}
+
+/* ---------- global bottom nav (home-level tabs) ---------- */
+#global-bottom-nav{
+  position:absolute; left:0; right:0; bottom:0; height:var(--nav-h); z-index:16;
+  display:flex; align-items:stretch; border-top:1px solid var(--border-soft); background:var(--surface);
+  box-shadow:0 -10px 26px rgba(0,0,0,0.18);
+}
+#global-bottom-nav.hidden{display:none;}
+#global-bottom-nav .navbtn.brand{flex:0 0 52px;}
+#global-bottom-nav .navbtn.brand .vs-mark{margin:0 auto; width:28px; height:28px; border-radius:8px;}
+#global-bottom-nav .navbtn.brand .vs-mark svg{width:15px; height:15px;}
+
+/* ---------- side panel (slide from right, twitter-notification style) ---------- */
+.overlay{position:absolute; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .2s; z-index:20;}
+.overlay.show{opacity:1; pointer-events:auto;}
+.side-panel{
+  position:absolute; top:0; bottom:0; width:min(360px,88vw); background:var(--surface);
+  box-shadow:var(--shadow-panel); z-index:21; display:flex; flex-direction:column;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.side-panel.right{right:0; transform:translateX(100%); border-left:1px solid var(--border);}
+.side-panel.left{left:0; transform:translateX(-100%); border-right:1px solid var(--border);}
+.side-panel.open{transform:translateX(0);}
+.panel-header{display:flex; align-items:center; gap:10px; padding:16px; border-bottom:1px solid var(--border-soft);}
+.panel-header b{font-family:var(--font-display); font-size:15px;}
+.panel-header .spacer{flex:1;}
+.panel-close{width:30px; height:30px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.panel-body{flex:1; overflow-y:auto; padding:14px 16px 30px;}
+.panel-search{display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin-bottom:12px;}
+.panel-search input{background:none; border:none; outline:none; color:var(--text); font-size:13px; flex:1;}
+.panel-search svg{width:14px; height:14px; stroke:var(--text-faint);}
+
+.fx-group{margin-bottom:18px;}
+.fx-group h4{font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); margin:0 0 10px; font-weight:700;}
+.fx-item{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:10px; background:var(--surface-2); margin-bottom:8px; cursor:grab; border:1px solid var(--border-soft);}
+.fx-item:hover{border-color:var(--accent);}
+.fx-item .fxname{font-size:13px; font-weight:500; display:flex; align-items:center; gap:8px;}
+.fx-item .fxname svg{width:15px; height:15px; stroke:var(--text-dim);}
+.fx-item button{font-size:11px; padding:5px 10px; border-radius:7px; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent); cursor:pointer; font-weight:600;}
+
+.slider-row{margin-bottom:16px;}
+.slider-row .lbl{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:8px; color:var(--text-dim);}
+.slider-row .lbl b{color:var(--text); font-family:var(--font-mono); font-weight:500; font-size:12px;}
+input[type=range]{
+  -webkit-appearance:none; width:100%; height:4px; border-radius:2px; background:var(--surface-3); outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:17px; height:17px; border-radius:50%; background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.4); cursor:pointer; border:3px solid var(--accent);
+}
+input[type=range]::-moz-range-thumb{width:17px; height:17px; border-radius:50%; background:#fff; border:3px solid var(--accent); cursor:pointer;}
+
+.chip-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
+.chip{padding:7px 13px; border-radius:999px; background:var(--surface-2); border:1px solid var(--border); font-size:12px; cursor:pointer; color:var(--text-dim);}
+.chip.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+
+.preset-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.preset-card{
+  position:relative; background:var(--surface-2); border:1px solid var(--border-soft); border-radius:12px; padding:12px 10px;
+  cursor:pointer; text-align:center; transition:border-color .15s, transform .1s;
+}
+.preset-card:hover{border-color:var(--accent); transform:translateY(-2px);}
+.preset-card .pemoji{font-size:20px; margin-bottom:6px;}
+.preset-card .pname{font-size:11.5px; font-weight:600;}
+.badge-my{position:absolute; top:5px; right:5px; font-size:8.5px; background:var(--accent); color:#fff; padding:1px 5px; border-radius:6px; font-weight:700;}
+
+.ai-scenario{display:flex; align-items:center; gap:12px; padding:14px; border-radius:12px; background:var(--surface-2); border:1px solid var(--border-soft); margin-bottom:10px; cursor:pointer;}
+.ai-scenario.on{border-color:var(--accent); background:var(--accent-soft);}
+.ai-scenario .aemoji{font-size:22px;}
+.ai-scenario .atext b{display:block; font-size:13.5px;}
+.ai-scenario .atext span{font-size:11.5px; color:var(--text-faint);}
+.primary-btn{
+  width:100%; padding:13px; border-radius:12px; border:none; background:linear-gradient(155deg,var(--accent),#4834C7);
+  color:#fff; font-weight:700; font-size:14px; cursor:pointer; margin-top:6px;
+}
+.primary-btn:disabled{opacity:.5; cursor:default;}
+.ghost-btn{width:100%; padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font-weight:600; font-size:13px; cursor:pointer; margin-top:8px;}
+
+.export-fmt{display:flex; gap:8px; margin-bottom:16px;}
+.export-fmt .chip{flex:1; text-align:center;}
+
+/* toast */
+#toast{position:absolute; left:50%; bottom:calc(var(--nav-h) + 24px); transform:translate(-50%,20px); background:var(--surface-3); border:1px solid var(--border); color:var(--text); padding:11px 18px; border-radius:999px; font-size:13px; opacity:0; pointer-events:none; transition:all .25s; z-index:60; box-shadow:0 8px 24px rgba(0,0,0,.4); white-space:nowrap;}
+#toast.show{opacity:1; transform:translate(-50%,0);}
+
+/* command palette */
+#cmdk-overlay{position:absolute; inset:0; background:rgba(0,0,0,.55); z-index:70; display:none; align-items:flex-start; justify-content:center; padding-top:12vh;}
+#cmdk-overlay.show{display:flex;}
+#cmdk{width:min(480px,88vw); background:var(--surface-2); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-panel);}
+#cmdk input{width:100%; box-sizing:border-box; padding:16px 18px; background:transparent; border:none; outline:none; color:var(--text); font-size:15px; border-bottom:1px solid var(--border-soft);}
+#cmdk-list{max-height:320px; overflow-y:auto; padding:6px;}
+.cmdk-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px; cursor:pointer; font-size:13.5px;}
+.cmdk-item.sel{background:var(--accent-soft); color:var(--accent);}
+.cmdk-item .k{margin-left:auto; font-size:10.5px; color:var(--text-faint); font-family:var(--font-mono);}
+
+/* record modal */
+.modal-backdrop{position:absolute; inset:0; background:rgba(0,0,0,.6); z-index:50; display:none; align-items:center; justify-content:center;}
+.modal-backdrop.show{display:flex;}
+.modal{width:min(320px,86vw); background:var(--surface-2); border:1px solid var(--border); border-radius:20px; padding:26px 22px; text-align:center;}
+.rec-orb{width:96px; height:96px; border-radius:50%; margin:6px auto 18px; background:var(--danger-soft); display:flex; align-items:center; justify-content:center; position:relative;}
+.rec-orb .core{width:60px; height:60px; border-radius:50%; background:var(--danger); display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 0 rgba(255,75,92,.5); animation:pulse 1.6s infinite;}
+.rec-orb .core svg{width:26px; height:26px; fill:#fff; stroke:none;}
+.rec-timer{font-family:var(--font-mono); font-size:26px; margin-bottom:6px;}
+.rec-target{font-size:12.5px; color:var(--text-faint); margin-bottom:20px;}
+.rec-controls{display:flex; gap:10px; justify-content:center;}
+.rec-controls button{padding:11px 18px; border-radius:12px; border:1px solid var(--border); background:var(--surface-3); color:var(--text); font-weight:600; font-size:13px; cursor:pointer;}
+.rec-controls button.stop{background:var(--danger); border-color:var(--danger); color:#fff;}
+
+/* library / share / voiceproj / customize helpers */
+.section-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-m); padding:14px; margin-bottom:14px;}
+.share-card{display:flex; align-items:center; gap:12px; padding:12px; border-radius:12px; background:var(--surface); border:1px solid var(--border); margin-bottom:10px;}
+.share-card .pemoji{font-size:22px; flex:none;}
+.share-card .atext{flex:1; min-width:0;}
+.share-card .atext b{display:block; font-size:13.5px;}
+.share-card .atext span{font-size:11px; color:var(--text-faint);}
+.share-card button{flex:none; font-size:11px; padding:7px 12px; border-radius:8px; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:700; cursor:pointer;}
+.vp-card{display:flex; align-items:center; gap:12px; padding:12px; border-radius:12px; background:var(--surface); border:1px solid var(--border); margin-bottom:10px;}
+.vp-card .pemoji{font-size:22px;}
+.vp-card .atext{flex:1; min-width:0;}
+.vp-card .atext b{display:block; font-size:13.5px;}
+.vp-card .atext span{font-size:11px; color:var(--text-faint);}
+.vp-card .vpbtns{display:flex; gap:6px; flex:none;}
+.vp-card .vpbtns .chip{padding:6px 10px; font-size:11px;}
+.name-emoji-row{display:flex; gap:8px; margin-bottom:16px;}
+.name-emoji-row input{padding:11px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13px; outline:none;}
+.name-emoji-row input.emoji-in{width:56px; text-align:center; font-size:18px; flex:none;}
+.name-emoji-row input.name-in{flex:1;}
+.nr-type-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;}
+.quick-light{width:38px; height:38px; border-radius:50%; border:1px solid var(--border); background:var(--surface-2); display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;}
+.quick-light svg{width:17px; height:17px; stroke:var(--text-dim);}
+.toggle-row{display:flex; align-items:center; justify-content:space-between; padding:2px 0 4px;}
+.switch{position:relative; width:42px; height:24px; border-radius:999px; background:var(--surface-3); border:1px solid var(--border); cursor:pointer; flex:none;}
+.switch .knob{position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s;}
+.switch.on{background:var(--accent); border-color:var(--accent);}
+.switch.on .knob{left:20px;}
+
+/* generic scrim panel like settings/customize as bottom sheet on mobile-narrow */
+@media (max-width:520px){
+  .side-panel{width:100vw;}
+  .track-head{width:112px;}
+  .track-vol input[type=range]{width:44px;}
+  .home-actions{flex-wrap:nowrap;}
+}
+
+input[type=file]{display:none;}
+.hidden-input{display:none;}
+.small-note{font-size:11px; color:var(--text-faint); line-height:1.6; margin-top:4px;}
+.divider{height:1px; background:var(--border-soft); margin:16px 0;}
+.theme-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+.theme-dot{width:100%; aspect-ratio:1; border-radius:50%; cursor:pointer; border:2px solid transparent; display:flex; align-items:center; justify-content:center;}
+.theme-dot.on{border-color:var(--text);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ HOME SCREEN ============ -->
+  <div id="screen-home">
+    <div class="home-header">
+      <div class="vs-mark idle"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 2-9 2 6h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="title">Voice Studio</div>
+      <div class="spacer"></div>
+      <div class="quick-light" id="btn-quicklight" title="ライト/ダーク切替">
+        <svg id="quicklight-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </div>
+      <div class="icon-btn" id="btn-settings" title="カスタマイズ">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      </div>
+    </div>
+
+    <div class="search-bar" id="open-cmdk-home">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <span>検索・すべての機能</span>
+      <kbd>⌘K</kbd>
+    </div>
+
+    <div class="home-actions">
+      <div class="home-action record" id="home-record">
+        <div class="dot"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 19v3"/></svg></div>
+        <span>録音する</span>
+      </div>
+      <div class="home-action open" id="home-open">
+        <div class="dot"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <span>ファイルを開く</span>
+      </div>
+      <div class="home-action new" id="home-new">
+        <div class="dot"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+        <span>新規作成</span>
+      </div>
+    </div>
+
+    <div class="section-label">最近のプロジェクト</div>
+    <div class="project-list" id="project-list">
+      <div class="empty-state" id="empty-projects">
+        <svg class="idle" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <b>まだプロジェクトがありません</b>
+        <p>録音するか、音声ファイルを読み込んで<br>最初のプロジェクトを作りましょう。</p>
+      </div>
+    </div>
+
+    <button class="fab" id="fab-new" title="新規作成">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+
+  <!-- ============ LIBRARY SCREEN ============ -->
+  <div class="top-screen hidden" id="screen-library">
+    <div class="screen-header">
+      <div class="title">📚 ライブラリ</div>
+      <div class="spacer"></div>
+      <div class="icon-btn" id="lib-add" title="音声を読み込む">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+    </div>
+    <div class="screen-scroll" id="lib-list"></div>
+  </div>
+
+  <!-- ============ SHARE SCREEN ============ -->
+  <div class="top-screen hidden" id="screen-share">
+    <div class="screen-header"><div class="title">🌐 テンプレート共有</div></div>
+    <div class="screen-scroll">
+      <div class="small-note" style="margin-bottom:12px;">公式のボイス加工テンプレートと、あなたが共有したテンプレートです。「追加」でマイテンプレートに取り込むと、エディターのエフェクト画面ですぐ使えます。</div>
+      <div id="share-list"></div>
+    </div>
+  </div>
+
+  <!-- ============ VOICE ADJUSTMENT PROJECTS SCREEN ============ -->
+  <div class="top-screen hidden" id="screen-voiceproj">
+    <div class="screen-header">
+      <div class="title">🎛 音声調整プロジェクト</div>
+      <div class="spacer"></div>
+      <div class="icon-btn" id="vp-new-btn" title="新規テンプレート">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </div>
+    </div>
+    <div class="screen-scroll">
+      <div class="small-note" style="margin-bottom:12px;">自分だけのボイス加工テンプレートを作成・保存できます。作成したテンプレートはエディターのエフェクト画面（プリセット一覧）からいつでも使用できます。</div>
+      <div id="vp-list"></div>
+
+      <div class="section-card vp-editor" id="vp-editor">
+        <h4 style="margin:0 0 12px;font-size:13px;">テンプレートを編集</h4>
+        <div class="name-emoji-row">
+          <input class="emoji-in" id="vp-emoji" value="🎛" maxlength="2">
+          <input class="name-in" id="vp-name" placeholder="テンプレート名">
+        </div>
+
+        <div class="fx-group"><h4>ピッチ</h4>
+          <div class="slider-row"><div class="lbl"><span>Pitch</span><b id="vp-pitch-val">0 半音</b></div><input type="range" id="vp-pitch" min="-12" max="12" value="0" step="1"></div>
+        </div>
+        <div class="fx-group"><h4>EQ（3バンド）</h4>
+          <div class="slider-row"><div class="lbl"><span>低音</span><b id="vp-low-val">0 dB</b></div><input type="range" id="vp-low" min="-12" max="12" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>中音</span><b id="vp-mid-val">0 dB</b></div><input type="range" id="vp-mid" min="-12" max="12" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>高音</span><b id="vp-high-val">0 dB</b></div><input type="range" id="vp-high" min="-12" max="12" value="0" step="1"></div>
+        </div>
+        <div class="fx-group"><h4>リバーブ / ディレイ</h4>
+          <div class="slider-row"><div class="lbl"><span>リバーブ</span><b id="vp-reverb-val">0%</b></div><input type="range" id="vp-reverb" min="0" max="100" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>ディレイMix</span><b id="vp-dmix-val">0%</b></div><input type="range" id="vp-dmix" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group"><h4>質感</h4>
+          <div class="slider-row"><div class="lbl"><span>ディストーション</span><b id="vp-dist-val">0%</b></div><input type="range" id="vp-dist" min="0" max="100" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>トレモロ</span><b id="vp-trem-val">0%</b></div><input type="range" id="vp-trem" min="0" max="100" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>ロボット</span><b id="vp-ring-val">0%</b></div><input type="range" id="vp-ring" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group"><h4>ノイズ除去</h4>
+          <div class="chip-row" id="vp-nr-type">
+            <div class="chip on" data-type="off">オフ</div>
+            <div class="chip" data-type="standard">標準</div>
+            <div class="chip" data-type="strong">強力</div>
+            <div class="chip" data-type="wind">風切り音</div>
+            <div class="chip" data-type="typing">タイピング音</div>
+            <div class="chip" data-type="hum">ハムノイズ</div>
+          </div>
+        </div>
+        <button class="primary-btn" id="vp-save">テンプレートを保存</button>
+        <button class="ghost-btn" id="vp-cancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CUSTOMIZE SCREEN ============ -->
+  <div class="top-screen hidden" id="screen-customize">
+    <div class="screen-header"><div class="title">⚙ カスタマイズ</div></div>
+    <div class="screen-scroll">
+      <div class="panel-search"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="settings-search" placeholder="設定を検索…"></div>
+
+      <div class="fx-group" data-key="ライト ダーク モード テーマ">
+        <h4>表示モード</h4>
+        <div class="chip-row">
+          <div class="chip" id="mode-dark">🌙 ダーク</div>
+          <div class="chip" id="mode-light">☀ ライト</div>
+        </div>
+        <div class="small-note">ワンタップでライトモード / ダークモードを切り替えられます。</div>
+      </div>
+
+      <div class="fx-group" data-key="テーマ カラー">
+        <h4>テーマカラー</h4>
+        <div class="theme-grid" id="theme-grid"></div>
+      </div>
+
+      <div class="fx-group" data-key="待機モーション アニメーション ロゴ">
+        <h4>待機モーション</h4>
+        <div class="toggle-row">
+          <span style="font-size:13px;color:var(--text-dim);">ロゴや空の画面をゆらゆら動かす</span>
+          <div class="switch on" id="switch-idlemotion"><div class="knob"></div></div>
+        </div>
+      </div>
+
+      <div class="fx-group" data-key="アイコン サイズ 大きさ">
+        <h4>アイコンサイズ</h4>
+        <input type="range" id="set-iconsize" min="18" max="30" value="22">
+      </div>
+      <div class="fx-group" data-key="タイムライン 高さ">
+        <h4>タイムラインの高さ</h4>
+        <input type="range" id="set-timelineheight" min="64" max="140" value="96">
+      </div>
+      <div class="fx-group" data-key="波形 色">
+        <h4>波形カラー</h4>
+        <input type="color" id="set-wavecolor" value="#6C5CE7" style="width:100%;height:38px;border-radius:8px;border:1px solid var(--border);background:none;">
+      </div>
+      <div class="fx-group" data-key="パネル 位置">
+        <h4>エフェクトパネルの位置</h4>
+        <div class="chip-row">
+          <div class="chip on" id="panelpos-right">右側</div>
+          <div class="chip" id="panelpos-left">左側</div>
+        </div>
+      </div>
+      <div class="fx-group" data-key="ショートカット キーボード">
+        <h4>ショートカット</h4>
+        <div class="small-note">
+          Space 再生/停止 ・ S 分割 ・ Delete 削除 ・ Ctrl/⌘+Z 戻す ・ Ctrl/⌘+Shift+Z やり直す ・ Ctrl/⌘+C / V コピー&貼り付け ・ Ctrl/⌘+K コマンドパレット
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ EDITOR SCREEN ============ -->
+  <div id="screen-editor">
+    <div class="tabbar" id="tabbar"></div>
+
+    <div class="editor-top">
+      <div class="back" id="btn-back" title="保存してホームへ">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="m15 18-6-6 6-6"/></svg>
+        <span>保存して戻る</span>
+      </div>
+      <input class="pname-input" id="pname-input" value="Untitled Project">
+      <div class="spacer"></div>
+      <div class="save-chip" id="save-chip" title="今すぐ保存"><span class="dot2"></span><span id="save-chip-text">保存済み</span></div>
+    </div>
+
+    <div class="transport">
+      <div class="tbtn" id="btn-rewind" title="先頭に戻る"><svg viewBox="0 0 24 24"><path d="M11 19V5l-9 7zM20 19V5l-9 7z"/></svg></div>
+      <div class="tbtn primary" id="btn-play" title="再生/一時停止"><svg id="play-icon" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></div>
+      <div class="tbtn" id="btn-stop" title="停止"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></div>
+      <div class="time-display"><b id="time-cur">00:00.0</b> / <span id="time-total">00:00.0</span></div>
+      <div class="spacer"></div>
+      <div class="zoom-ctl">
+        <button id="zoom-out">−</button>
+        <button id="zoom-in">＋</button>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <div class="timeline-wrap" id="timeline-wrap">
+        <div class="ruler" id="ruler"></div>
+        <div class="tracks" id="tracks"></div>
+        <div class="playhead" id="playhead" style="left:0px;"></div>
+        <div class="dropzone-hint2" id="dropzone-hint2">🎵 ここに音声ファイルをドロップして読み込み</div>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <button class="navbtn" data-panel="edit"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M6 3v18M18 3v18M3 8h6M15 8h6M3 16h6M15 16h6"/></svg><span>編集</span></button>
+      <button class="navbtn" data-panel="fx"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>エフェクト</span></button>
+      <button class="navbtn" id="navbtn-record" data-panel="record"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 19v3"/></svg><span>録音</span></button>
+      <button class="navbtn" data-panel="ai"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 3h6l-1 4h-4z"/><circle cx="9" cy="13.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>AI</span></button>
+      <button class="navbtn" data-panel="export"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 17v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>書き出し</span></button>
+    </div>
+  </div>
+
+  <!-- ============ GLOBAL BOTTOM NAV (home-level tabs) ============ -->
+  <div id="global-bottom-nav">
+    <button class="navbtn brand" data-go="home" title="Voice Studio"><div class="vs-mark idle"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 2-9 2 6h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></button>
+    <button class="navbtn" data-go="home"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>ホーム</span></button>
+    <button class="navbtn" data-go="library"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 5h16M4 5v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V5M9 5v15M9 9h6M9 13h6"/></svg><span>ライブラリ</span></button>
+    <button class="navbtn" data-go="share"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.4 13.4l7.2 4.2M15.6 6.4L8.4 10.6"/></svg><span>共有</span></button>
+    <button class="navbtn" data-go="voiceproj"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>調整</span></button>
+    <button class="navbtn" data-go="customize"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg><span>カスタマイズ</span></button>
+  </div>
+
+  <!-- ============ OVERLAY + PANELS ============ -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- EDIT panel -->
+  <div class="side-panel right" id="panel-edit">
+    <div class="panel-header"><div class="vs-mark" style="width:26px;height:26px;border-radius:7px;"><svg viewBox="0 0 24 24" fill="none" style="width:13px;height:13px;"><path d="M6 3v18M18 3v18" stroke="#fff" stroke-width="2.4"/></svg></div><b>編集</b><div class="spacer"></div><div class="panel-close" data-close><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+    <div class="panel-body">
+      <div class="fx-group">
+        <h4>選択中のクリップ</h4>
+        <div id="edit-clip-info" class="small-note">タイムライン上のクリップをタップして選択してください。</div>
+      </div>
+      <div class="fx-group" id="edit-actions-group" style="display:none;">
+        <h4>操作</h4>
+        <div class="chip-row">
+          <div class="chip" id="act-split">✂ 分割</div>
+          <div class="chip" id="act-copy">📋 コピー</div>
+          <div class="chip" id="act-paste">📌 貼り付け</div>
+          <div class="chip" id="act-duplicate">⧉ 複製</div>
+          <div class="chip" id="act-mute">🔇 ミュート</div>
+          <div class="chip" id="act-normalize">📶 音量正規化</div>
+          <div class="chip" id="act-delete" style="color:var(--danger);border-color:var(--danger);">🗑 削除</div>
+        </div>
+      </div>
+      <div class="fx-group" id="edit-volume-group" style="display:none;">
+        <h4>音量 / フェード</h4>
+        <div class="slider-row"><div class="lbl"><span>音量</span><b id="v-gain-val">0 dB</b></div><input type="range" id="v-gain" min="-24" max="12" value="0" step="0.5"></div>
+        <div class="slider-row"><div class="lbl"><span>フェードイン</span><b id="v-fin-val">0.0s</b></div><input type="range" id="v-fadein" min="0" max="5" value="0" step="0.1"></div>
+        <div class="slider-row"><div class="lbl"><span>フェードアウト</span><b id="v-fout-val">0.0s</b></div><input type="range" id="v-fadeout" min="0" max="5" value="0" step="0.1"></div>
+        <div class="slider-row"><div class="lbl"><span>パン (左右)</span><b id="v-pan-val">中央</b></div><input type="range" id="v-pan" min="-1" max="1" value="0" step="0.05"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="fx-group">
+        <h4>元に戻す</h4>
+        <div class="chip-row">
+          <div class="chip" id="btn-undo">↩ Undo</div>
+          <div class="chip" id="btn-redo">↪ Redo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EFFECTS panel -->
+  <div class="side-panel right" id="panel-fx">
+    <div class="panel-header"><b>🎛 エフェクト</b><div class="spacer"></div><div class="panel-close" data-close><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+    <div class="panel-body">
+      <div id="fx-noclip" class="small-note">クリップを選択するとエフェクトを調整できます。</div>
+      <div id="fx-controls" style="display:none;">
+        <div class="fx-group">
+          <h4>ノイズ除去</h4>
+          <div class="chip-row" id="fx-nr-type">
+            <div class="chip on" data-type="off">オフ</div>
+            <div class="chip" data-type="standard">標準</div>
+            <div class="chip" data-type="strong">強力</div>
+            <div class="chip" data-type="wind">風切り音</div>
+            <div class="chip" data-type="typing">タイピング音</div>
+            <div class="chip" data-type="hum">ハムノイズ</div>
+          </div>
+          <div class="slider-row"><div class="lbl"><span>強さ</span><b id="fx-nr-amount-val">40%</b></div><input type="range" id="fx-nr-amount" min="0" max="100" value="40" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>ピッチ（速度も変化）</h4>
+          <div class="slider-row"><div class="lbl"><span>Pitch</span><b id="fx-pitch-val">0 半音</b></div><input type="range" id="fx-pitch" min="-12" max="12" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>EQ（3バンド）</h4>
+          <div class="slider-row"><div class="lbl"><span>低音</span><b id="fx-low-val">0 dB</b></div><input type="range" id="fx-low" min="-12" max="12" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>中音</span><b id="fx-mid-val">0 dB</b></div><input type="range" id="fx-mid" min="-12" max="12" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>高音</span><b id="fx-high-val">0 dB</b></div><input type="range" id="fx-high" min="-12" max="12" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>リバーブ</h4>
+          <div class="chip-row" id="fx-reverb-size">
+            <div class="chip on" data-size="small">小部屋</div>
+            <div class="chip" data-size="medium">ホール</div>
+            <div class="chip" data-size="large">大聖堂</div>
+          </div>
+          <div class="slider-row"><div class="lbl"><span>Wet</span><b id="fx-reverb-val">0%</b></div><input type="range" id="fx-reverb" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>ディレイ / エコー</h4>
+          <div class="slider-row"><div class="lbl"><span>タイム</span><b id="fx-dtime-val">0.30s</b></div><input type="range" id="fx-dtime" min="0.02" max="1" value="0.3" step="0.01"></div>
+          <div class="slider-row"><div class="lbl"><span>フィードバック</span><b id="fx-dfb-val">0%</b></div><input type="range" id="fx-dfb" min="0" max="85" value="0" step="1"></div>
+          <div class="slider-row"><div class="lbl"><span>Mix</span><b id="fx-dmix-val">0%</b></div><input type="range" id="fx-dmix" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>ディストーション</h4>
+          <div class="slider-row"><div class="lbl"><span>強さ</span><b id="fx-dist-val">0%</b></div><input type="range" id="fx-dist" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>トレモロ（水中・揺らぎ）</h4>
+          <div class="slider-row"><div class="lbl"><span>深さ</span><b id="fx-trem-val">0%</b></div><input type="range" id="fx-trem" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <div class="fx-group">
+          <h4>ロボット（リングモジュレーター）</h4>
+          <div class="slider-row"><div class="lbl"><span>量</span><b id="fx-ring-val">0%</b></div><input type="range" id="fx-ring" min="0" max="100" value="0" step="1"></div>
+        </div>
+        <button class="ghost-btn" id="fx-reset">エフェクトをリセット</button>
+      </div>
+      <div class="divider"></div>
+      <div class="fx-group">
+        <h4>ボイス加工プリセット</h4>
+        <div class="small-note" style="margin-bottom:10px;">「調整」タブで作った自作テンプレートは ★MY 表示で一覧に追加されます。</div>
+        <div class="preset-grid" id="preset-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECORD modal -->
+  <div class="modal-backdrop" id="modal-record">
+    <div class="modal">
+      <div class="rec-orb"><div class="core"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg></div></div>
+      <div class="rec-timer" id="rec-timer">00:00</div>
+      <div class="rec-target" id="rec-target">Voice トラックに録音します</div>
+      <div class="rec-controls">
+        <button id="rec-cancel">キャンセル</button>
+        <button class="stop" id="rec-toggle">録音開始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI panel -->
+  <div class="side-panel right" id="panel-ai">
+    <div class="panel-header"><b>🤖 AI アシスト</b><div class="spacer"></div><div class="panel-close" data-close><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+    <div class="panel-body">
+      <div class="small-note" style="margin-bottom:12px;">シーンを選ぶと、そのシーンに合わせたEQ・コンプレッサー・ノイズゲートなどを選択中のクリップへまとめて適用します。</div>
+      <div class="ai-scenario" data-scenario="commentary"><div class="aemoji">🎮</div><div class="atext"><b>実況</b><span>声を前に出し、抜けの良いクリアな音に</span></div></div>
+      <div class="ai-scenario" data-scenario="song"><div class="aemoji">🎤</div><div class="atext"><b>歌</b><span>軽いリバーブとコンプで歌声を整える</span></div></div>
+      <div class="ai-scenario" data-scenario="stream"><div class="aemoji">📡</div><div class="atext"><b>配信</b><span>ノイズゲート強め、音量を安定化</span></div></div>
+      <div class="ai-scenario" data-scenario="meeting"><div class="aemoji">💼</div><div class="atext"><b>会議</b><span>明瞭度を上げ低音のこもりを軽減</span></div></div>
+      <div class="ai-scenario" data-scenario="asmr"><div class="aemoji">🎧</div><div class="atext"><b>ASMR</b><span>高音域を持ち上げ空気感を強調</span></div></div>
+      <button class="primary-btn" id="ai-apply" disabled>クリップを選択してください</button>
+      <div class="divider"></div>
+      <div class="fx-group">
+        <h4>詳細設定</h4>
+        <div class="slider-row"><div class="lbl"><span>ノイズゲート しきい値</span><b id="ai-gate-val">-40 dB</b></div><input type="range" id="ai-gate" min="-60" max="-10" value="-40" step="1"></div>
+        <div class="slider-row"><div class="lbl"><span>コンプレッサー量</span><b id="ai-comp-val">30%</b></div><input type="range" id="ai-comp" min="0" max="100" value="30" step="1"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT panel -->
+  <div class="side-panel right" id="panel-export">
+    <div class="panel-header"><b>📤 書き出し</b><div class="spacer"></div><div class="panel-close" data-close><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+    <div class="panel-body">
+      <div class="fx-group">
+        <h4>形式</h4>
+        <div class="export-fmt">
+          <div class="chip on" data-fmt="wav">WAV</div>
+          <div class="chip" data-fmt="webm">WebM/Opus</div>
+        </div>
+        <div class="small-note">ブラウザだけで確実に書き出せる形式に絞っています。MP3などが必要な場合は書き出し後に変換してください。</div>
+      </div>
+      <div class="fx-group">
+        <h4>ミックス（トラック音量も反映されます）</h4>
+        <div id="export-track-list"></div>
+      </div>
+      <button class="primary-btn" id="btn-export">プロジェクトを書き出す</button>
+      <div id="export-progress" class="small-note" style="text-align:center;margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- command palette -->
+  <div id="cmdk-overlay">
+    <div id="cmdk">
+      <input id="cmdk-input" placeholder="機能を検索して実行…" autocomplete="off">
+      <div id="cmdk-list"></div>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="audio/*">
+  <input type="file" id="lib-file-input" accept="audio/*">
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   0. ユーティリティ
+   ============================================================ */
+const $  = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const uid = (p='id') => p + '_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
+const TRACK_HEAD_W = 150;
+function fmtTime(sec){
+  sec = Math.max(0, sec||0);
+  const m = Math.floor(sec/60);
+  const s = sec - m*60;
+  return String(m).padStart(2,'0') + ':' + s.toFixed(1).padStart(4,'0');
+}
+function showToast(msg, ms=2200){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+/* ============================================================
+   1. Audio Engine
+   ============================================================ */
+const Engine = {
+  ctx: null,
+  masterGain: null,
+  _impulseCache: {},
+  get context(){
+    if(!this.ctx){
+      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = 1;
+      this.masterGain.connect(this.ctx.destination);
+    }
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+  async decodeArrayBuffer(arrayBuffer){
+    const ctx = this.context;
+    return await new Promise((res,rej)=>{
+      ctx.decodeAudioData(arrayBuffer.slice(0), res, rej);
+    });
+  },
+  impulse(ctx, size){
+    const key = size + '_' + (ctx===this.ctx ? 'rt':'off');
+    if(this._impulseCache[key] && this._impulseCache[key].ctx === ctx) return this._impulseCache[key].buf;
+    const durations = {small:1.1, medium:2.6, large:5.2};
+    const dur = durations[size] || 2;
+    const rate = ctx.sampleRate;
+    const len = Math.floor(rate*dur);
+    const buf = ctx.createBuffer(2, len, rate);
+    for(let ch=0; ch<2; ch++){
+      const data = buf.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        const decay = Math.pow(1 - i/len, 2.2);
+        data[i] = (Math.random()*2-1) * decay;
+      }
+    }
+    this._impulseCache[key] = {ctx, buf};
+    return buf;
+  },
+  distortionCurve(amount){
+    const k = amount * 1.2;
+    const n = 4096;
+    const curve = new Float32Array(n);
+    for(let i=0;i<n;i++){
+      const x = i*2/n - 1;
+      curve[i] = k <= 0 ? x : ((3+k)*x*20*(Math.PI/180)) / (Math.PI + k*Math.abs(x));
+    }
+    return curve;
+  },
+  /**
+   * Build the effect chain for a clip and connect source -> ... -> destination.
+   * trackDb: extra gain (dB) coming from the track-level volume fader.
+   * Returns {stop(): call to stop extra oscillators}
+   */
+  buildChain(ctx, sourceNode, clip, destination, when, dur, trackDb){
+    trackDb = trackDb||0;
+    const fx = clip.effects;
+    const extras = [];
+    let node = sourceNode;
+
+    function chain(next){ node.connect(next); node = next; }
+
+    // Noise reduction (multiple types)
+    const nr = fx.noiseReduction;
+    if(nr && nr.type && nr.type!=='off'){
+      const amt = clamp((nr.amount!=null?nr.amount:40)/100, 0, 1);
+      let hpFreq = 0, notchFreq = 0;
+      if(nr.type==='standard') hpFreq = 90;
+      else if(nr.type==='strong') hpFreq = 170;
+      else if(nr.type==='wind') hpFreq = 230;
+      else if(nr.type==='typing'){ hpFreq = 120; }
+      else if(nr.type==='hum'){ notchFreq = 60; }
+      if(hpFreq){ const f = ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=hpFreq; f.Q.value=0.7; chain(f); }
+      if(notchFreq){
+        const f1 = ctx.createBiquadFilter(); f1.type='notch'; f1.frequency.value=notchFreq; f1.Q.value=14; chain(f1);
+        const f2 = ctx.createBiquadFilter(); f2.type='notch'; f2.frequency.value=notchFreq*2; f2.Q.value=14; chain(f2);
+      }
+      if(nr.type==='typing'){ const f = ctx.createBiquadFilter(); f.type='peaking'; f.frequency.value=3200; f.Q.value=1.4; f.gain.value = -6*amt; chain(f); }
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -48 + (1-amt)*26;
+      comp.knee.value = 6; comp.ratio.value = 3 + amt*9; comp.attack.value = 0.004; comp.release.value = 0.18;
+      chain(comp);
+    }
+
+    // EQ 3-band
+    if(fx.eqLow){ const f = ctx.createBiquadFilter(); f.type='lowshelf'; f.frequency.value=250; f.gain.value=fx.eqLow; chain(f); }
+    if(fx.eqMid){ const f = ctx.createBiquadFilter(); f.type='peaking'; f.frequency.value=1200; f.Q.value=0.9; f.gain.value=fx.eqMid; chain(f); }
+    if(fx.eqHigh){ const f = ctx.createBiquadFilter(); f.type='highshelf'; f.frequency.value=4000; f.gain.value=fx.eqHigh; chain(f); }
+    if(fx.lowpass && fx.lowpass < 19999){ const f = ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=fx.lowpass; chain(f); }
+    if(fx.highpass && fx.highpass > 21){ const f = ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=fx.highpass; chain(f); }
+
+    // Ring modulation (robot)
+    if(fx.ringMod > 0){
+      const ringGain = ctx.createGain();
+      ringGain.gain.value = 0; // full modulation baseline
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 32 + fx.ringMod*1.1;
+      const depth = ctx.createGain();
+      depth.gain.value = fx.ringMod/100;
+      osc.connect(depth); depth.connect(ringGain.gain);
+      osc.start(when); extras.push(osc);
+      chain(ringGain);
+    }
+
+    // Distortion
+    if(fx.distortion > 0){
+      const ws = ctx.createWaveShaper();
+      ws.curve = Engine.distortionCurve(fx.distortion);
+      ws.oversample = '2x';
+      const pre = ctx.createGain(); pre.gain.value = 1 + fx.distortion/40;
+      const post = ctx.createGain(); post.gain.value = 1/(1+fx.distortion/60);
+      chain(pre); chain(ws); chain(post);
+    }
+
+    // Tremolo (underwater etc)
+    if(fx.tremoloDepth > 0){
+      const trem = ctx.createGain();
+      trem.gain.value = 1 - (fx.tremoloDepth/100)*0.5;
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 5;
+      const depth = ctx.createGain();
+      depth.gain.value = (fx.tremoloDepth/100)*0.5;
+      osc.connect(depth); depth.connect(trem.gain);
+      osc.start(when); extras.push(osc);
+      chain(trem);
+    }
+
+    // Delay / echo
+    if(fx.delayMix > 0){
+      const delay = ctx.createDelay(1.5);
+      delay.delayTime.value = fx.delayTime;
+      const fb = ctx.createGain(); fb.gain.value = fx.delayFeedback/100*0.9;
+      const wet = ctx.createGain(); wet.gain.value = fx.delayMix/100;
+      const dry = ctx.createGain(); dry.gain.value = 1;
+      const merge = ctx.createGain();
+      node.connect(dry); dry.connect(merge);
+      node.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(merge);
+      node = merge;
+    }
+
+    // Reverb
+    if(fx.reverbAmount > 0){
+      const conv = ctx.createConvolver();
+      conv.buffer = Engine.impulse(ctx, fx.reverbSize||'medium');
+      const wet = ctx.createGain(); wet.gain.value = fx.reverbAmount/100;
+      const dry = ctx.createGain(); dry.gain.value = 1;
+      const merge = ctx.createGain();
+      node.connect(dry); dry.connect(merge);
+      node.connect(conv); conv.connect(wet); wet.connect(merge);
+      node = merge;
+    }
+
+    // Panner
+    if(fx.pan){
+      const panNode = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      if(panNode){ panNode.pan.value = clamp(fx.pan,-1,1); chain(panNode); }
+    }
+
+    // Gain envelope (clip gain + track gain + fade in/out)
+    const gainNode = ctx.createGain();
+    const g = Math.pow(10, ((fx.gain||0) + trackDb)/20);
+    const fin = fx.fadeIn||0, fout = fx.fadeOut||0;
+    const t0 = when, t1 = when + Math.max(dur,0.01);
+    gainNode.gain.setValueAtTime(fin>0?0.0001:g, t0);
+    if(fin>0) gainNode.gain.exponentialRampToValueAtTime(Math.max(g,0.0001), t0+Math.min(fin,dur));
+    if(fout>0){
+      gainNode.gain.setValueAtTime(Math.max(g,0.0001), Math.max(t0, t1-Math.min(fout,dur)));
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t1);
+    }
+    chain(gainNode);
+
+    node.connect(destination);
+    return { stop(t){ extras.forEach(o=>{ try{o.stop(t);}catch(e){} }); } };
+  }
+};
+
+/* ============================================================
+   2. データモデル
+   ============================================================ */
+function defaultEffects(){
+  return {
+    pitchSemitones:0, eqLow:0, eqMid:0, eqHigh:0,
+    reverbAmount:0, reverbSize:'medium',
+    delayTime:0.3, delayFeedback:0, delayMix:0,
+    distortion:0, tremoloDepth:0, ringMod:0,
+    gain:0, pan:0, fadeIn:0, fadeOut:0,
+    lowpass:20000, highpass:20,
+    noiseReduction:{ type:'off', amount:40 },
+  };
+}
+function newClip(bufferId, start, duration, offset, name, color){
+  return { id: uid('clip'), bufferId, start, duration, offset, name, color, muted:false, effects: defaultEffects() };
+}
+function newTrack(name, type, color){
+  return { id: uid('track'), name, type, color, muted:false, solo:false, locked:false, volume:0, clips: [] };
+}
+function newProject(name){
+  return {
+    id: uid('proj'), name: name || '新しいプロジェクト', createdAt: Date.now(),
+    buffers: {}, // id -> AudioBuffer
+    tracks: [
+      newTrack('Voice','voice','var(--track-voice)'),
+      newTrack('BGM','bgm','var(--track-bgm)'),
+      newTrack('SE','se','var(--track-se)'),
+    ],
+  };
+}
+
+const App = {
+  projects: [],
+  library: [],        // {id,name,buffer,duration,addedAt} — global, usable in any project
+  customPresets: [],   // {id,name,emoji,effects,shared}
+  activeProjectId: null,
+  ui: { theme:'dark', iconSize:22, timelineHeight:96, waveColor:'#6C5CE7', panelSide:'right', pxPerSec:60, idleMotion:true },
+  playhead: 0,
+  selectedClipId: null,
+  clipboard: null,
+  isPlaying: false,
+  playStartCtxTime: 0,
+  playStartHead: 0,
+  activeSources: [],
+  history: [],
+  historyIdx: -1,
+  rafId: null,
+  vpEditingId: null,
+};
+
+function activeProject(){ return App.projects.find(p=>p.id===App.activeProjectId); }
+
+function projectDuration(p){
+  let end = 0;
+  p.tracks.forEach(t=>t.clips.forEach(c=>{ end = Math.max(end, c.start + c.duration); }));
+  return Math.max(end, 1);
+}
+
+/* ---------------- history (undo/redo) ---------------- */
+function snapshotClips(p){
+  return p.tracks.map(t=>({
+    id:t.id,
+    clips: t.clips.map(c=>JSON.parse(JSON.stringify(c)))
+  }));
+}
+function pushHistory(){
+  const p = activeProject(); if(!p) return;
+  const snap = snapshotClips(p);
+  App.history = App.history.slice(0, App.historyIdx+1);
+  App.history.push(snap);
+  if(App.history.length > 60) App.history.shift();
+  App.historyIdx = App.history.length - 1;
+  markUnsaved();
+}
+function restoreSnapshot(snap){
+  const p = activeProject(); if(!p) return;
+  snap.forEach(s=>{
+    const t = p.tracks.find(tt=>tt.id===s.id);
+    if(t) t.clips = s.clips;
+  });
+  renderTracks();
+  renderTimeRuler();
+}
+function undo(){
+  if(App.historyIdx <= 0){ showToast('これ以上戻せません'); return; }
+  App.historyIdx--;
+  restoreSnapshot(App.history[App.historyIdx]);
+  showToast('元に戻しました');
+}
+function redo(){
+  if(App.historyIdx >= App.history.length-1){ showToast('これ以上やり直せません'); return; }
+  App.historyIdx++;
+  restoreSnapshot(App.history[App.historyIdx]);
+  showToast('やり直しました');
+}
+let unsavedChanges = false;
+function markUnsaved(){
+  unsavedChanges = true;
+  const chip = $('#save-chip-text');
+  if(chip){ chip.textContent = '未保存の変更あり'; }
+  $('#save-chip') && $('#save-chip').classList.add('saving');
+}
+function saveProject(silent){
+  const p = activeProject();
+  if(p){
+    unsavedChanges = false;
+    const chip = $('#save-chip-text');
+    if(chip) chip.textContent = '保存済み';
+    $('#save-chip') && $('#save-chip').classList.remove('saving');
+    if(!silent) showToast('プロジェクトを保存しました');
+  }
+}
+
+/* ============================================================
+   3. Home screen rendering
+   ============================================================ */
+function renderProjectList(){
+  const list = $('#project-list');
+  const empty = $('#empty-projects');
+  list.querySelectorAll('.project-row').forEach(n=>n.remove());
+  if(App.projects.length===0){ empty.style.display='flex'; return; }
+  empty.style.display='none';
+  App.projects.slice().reverse().forEach(p=>{
+    const row = document.createElement('div');
+    row.className='project-row';
+    const dur = projectDuration(p);
+    const clipCount = p.tracks.reduce((a,t)=>a+t.clips.length,0);
+    row.innerHTML = `
+      <div class="project-thumb"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <div class="project-meta">
+        <div class="pname"></div>
+        <div class="psub">${fmtTime(dur)} ・ クリップ ${clipCount}</div>
+      </div>
+      <div class="more">⋮</div>`;
+    row.querySelector('.pname').textContent = p.name;
+    row.addEventListener('click', (e)=>{
+      if(e.target.closest('.more')) return;
+      openProject(p.id);
+    });
+    row.querySelector('.more').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(confirm(`「${p.name}」を削除しますか？`)){
+        App.projects = App.projects.filter(x=>x.id!==p.id);
+        renderProjectList();
+      }
+    });
+    list.appendChild(row);
+  });
+}
+
+function openProject(id){
+  App.activeProjectId = id;
+  App.selectedClipId = null;
+  App.playhead = 0;
+  App.history = [snapshotClips(activeProject())];
+  App.historyIdx = 0;
+  unsavedChanges = false;
+  $('#screen-home').classList.add('hidden');
+  $$('.top-screen').forEach(s=>s.classList.add('hidden'));
+  $('#global-bottom-nav').classList.add('hidden');
+  $('#screen-editor').classList.add('active');
+  renderTabbar();
+  const p = activeProject();
+  $('#pname-input').value = p.name;
+  $('#save-chip-text').textContent = '保存済み';
+  renderTracks();
+  renderTimeRuler();
+  updatePlayheadUI();
+  hideAllPanels();
+}
+function goHome(){
+  if($('#screen-editor').classList.contains('active')){
+    saveProject(true);
+    stopPlayback();
+    $('#screen-editor').classList.remove('active');
+  }
+  $('#global-bottom-nav').classList.remove('hidden');
+  switchTopScreen('home');
+}
+function createProject(){
+  const p = newProject('Untitled Project ' + (App.projects.length+1));
+  App.projects.push(p);
+  openProject(p.id);
+  showToast('新規プロジェクトを作成しました');
+}
+
+/* tabs (chrome-like multi project) */
+function renderTabbar(){
+  const bar = $('#tabbar');
+  bar.innerHTML='';
+  App.projects.forEach(p=>{
+    const tab = document.createElement('div');
+    tab.className = 'ptab' + (p.id===App.activeProjectId ? ' active':'');
+    tab.innerHTML = `<span></span><span class="x">✕</span>`;
+    tab.querySelector('span').textContent = p.name;
+    tab.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('x')){
+        e.stopPropagation();
+        App.projects = App.projects.filter(x=>x.id!==p.id);
+        if(App.projects.length){ openProject(App.projects[0].id); } else { goHome(); }
+        return;
+      }
+      openProject(p.id);
+    });
+    bar.appendChild(tab);
+  });
+  const add = document.createElement('div');
+  add.className='ptab-add'; add.textContent='＋';
+  add.addEventListener('click', createProject);
+  bar.appendChild(add);
+}
+
+/* ============================================================
+   4. Timeline rendering
+   ============================================================ */
+function renderTimeRuler(){
+  const p = activeProject(); if(!p) return;
+  const dur = projectDuration(p) + 8;
+  const px = App.ui.pxPerSec;
+  const ruler = $('#ruler');
+  ruler.style.width = (dur*px + TRACK_HEAD_W + 10) + 'px';
+  ruler.innerHTML='';
+  for(let s=0; s<=dur; s+= (px<40?5:(px<90?2:1))){
+    const tick = document.createElement('div');
+    tick.style.position='absolute';
+    tick.style.left = (TRACK_HEAD_W + s*px) + 'px';
+    tick.style.top='4px';
+    tick.style.fontSize='10px';
+    tick.style.color='var(--text-faint)';
+    tick.style.fontFamily='var(--font-mono)';
+    tick.textContent = fmtTime(s).slice(0,5);
+    ruler.appendChild(tick);
+  }
+  $('#time-total').textContent = fmtTime(projectDuration(p));
+}
+
+function drawWaveform(canvas, buffer, color){
+  const ctx2d = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx2d.clearRect(0,0,w,h);
+  if(!buffer) return;
+  const data = buffer.getChannelData(0);
+  const step = Math.max(1, Math.floor(data.length / w));
+  ctx2d.fillStyle = color;
+  const mid = h/2;
+  for(let x=0; x<w; x++){
+    let min=1, max=-1;
+    const start = x*step;
+    for(let i=0;i<step;i++){
+      const v = data[start+i]||0;
+      if(v<min) min=v; if(v>max) max=v;
+    }
+    const y1 = mid + min*mid*0.92;
+    const y2 = mid + max*mid*0.92;
+    ctx2d.fillRect(x, Math.min(y1,y2), 1, Math.max(1,Math.abs(y2-y1)));
+  }
+}
+
+function renderTracks(){
+  const p = activeProject(); if(!p) return;
+  const wrap = $('#tracks');
+  wrap.innerHTML='';
+  const th = App.ui.timelineHeight;
+  const px = App.ui.pxPerSec;
+  const totalWidth = (projectDuration(p)+8)*px + TRACK_HEAD_W;
+
+  p.tracks.forEach(track=>{
+    const row = document.createElement('div');
+    row.className='track-row';
+    row.style.height = th+'px';
+    row.style.width = totalWidth+'px';
+
+    const head = document.createElement('div');
+    head.className='track-head';
+    head.style.height = th+'px';
+    head.style.width = TRACK_HEAD_W+'px';
+    head.innerHTML = `
+      <div class="tname"><span class="sw" style="background:${track.color}"></span><span></span></div>
+      <div class="tctrls">
+        <div class="tmini m-mute">M</div>
+        <div class="tmini s-solo">S</div>
+        <div class="tmini l-lock">🔒</div>
+      </div>
+      <div class="track-vol"><span>🔈</span><input type="range" class="t-vol" min="-24" max="6" step="1"></div>`;
+    head.querySelector('.tname span:last-child').textContent = track.name;
+    const mBtn = head.querySelector('.m-mute'), sBtn = head.querySelector('.s-solo'), lBtn = head.querySelector('.l-lock');
+    const volEl = head.querySelector('.t-vol');
+    volEl.value = track.volume||0;
+    if(track.muted) mBtn.classList.add('on');
+    if(track.solo) sBtn.classList.add('on');
+    if(track.locked) lBtn.classList.add('on');
+    mBtn.addEventListener('click', ()=>{ track.muted=!track.muted; renderTracks(); });
+    sBtn.addEventListener('click', ()=>{ track.solo=!track.solo; renderTracks(); });
+    lBtn.addEventListener('click', ()=>{ track.locked=!track.locked; renderTracks(); });
+    volEl.addEventListener('input', ()=>{ track.volume = parseFloat(volEl.value); markUnsaved(); });
+    row.appendChild(head);
+
+    const lane = document.createElement('div');
+    lane.className='track-lane';
+    lane.style.marginLeft=TRACK_HEAD_W+'px';
+    lane.style.height=th+'px';
+    lane.style.width = (totalWidth-TRACK_HEAD_W)+'px';
+    lane.dataset.trackId = track.id;
+
+    track.clips.forEach(clip=>{
+      const el = document.createElement('div');
+      el.className='clip' + (clip.id===App.selectedClipId ? ' selected':'');
+      el.style.left = (clip.start*px)+'px';
+      el.style.width = Math.max(6,clip.duration*px)+'px';
+      el.style.background = clip.muted ? 'var(--surface-3)' : track.color;
+      el.dataset.clipId = clip.id;
+      const label = document.createElement('div');
+      label.className='cliplabel';
+      label.textContent = clip.name + (clip.muted?' (mute)':'');
+      el.appendChild(label);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(6,Math.floor(clip.duration*px));
+      canvas.height = th-12;
+      el.appendChild(canvas);
+      const buf = p.buffers[clip.bufferId];
+      requestAnimationFrame(()=>drawWaveform(canvas, buf, 'rgba(255,255,255,0.85)'));
+
+      const hl = document.createElement('div'); hl.className='handle l';
+      const hr = document.createElement('div'); hr.className='handle r';
+      el.appendChild(hl); el.appendChild(hr);
+
+      attachClipInteractions(el, track, clip, hl, hr);
+      lane.appendChild(el);
+    });
+
+    lane.addEventListener('pointerdown', (e)=>{
+      if(e.target!==lane) return;
+      const rect = lane.getBoundingClientRect();
+      const t = (e.clientX-rect.left)/px;
+      App.playhead = Math.max(0,t);
+      updatePlayheadUI();
+      App.selectedClipId=null;
+      renderTracks();
+      renderEditPanel(); renderFxPanel();
+    });
+
+    row.appendChild(lane);
+    wrap.appendChild(row);
+  });
+}
+
+function attachClipInteractions(el, track, clip, hl, hr){
+  const px = ()=>App.ui.pxPerSec;
+  el.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    if(track.locked) { showToast('このトラックはロックされています'); return; }
+    App.selectedClipId = clip.id;
+    renderTracks(); renderEditPanel(); renderFxPanel();
+
+    const isHandleL = e.target===hl, isHandleR = e.target===hr;
+    const startX = e.clientX;
+    const origStart = clip.start, origDur = clip.duration, origOffset = clip.offset;
+    try{ (e.target).setPointerCapture(e.pointerId); }catch(err){}
+
+    function move(ev){
+      const dx = (ev.clientX-startX)/px();
+      if(isHandleL){
+        let ns = clamp(origStart+dx, 0, origStart+origDur-0.05);
+        ns = Math.round(ns/0.05)*0.05;
+        const delta = ns-origStart;
+        clip.start = ns; clip.duration = origDur-delta; clip.offset = origOffset+delta;
+      } else if(isHandleR){
+        let nd = clamp(origDur+dx, 0.05, 1e6);
+        clip.duration = Math.round(nd/0.05)*0.05;
+      } else {
+        let ns = Math.max(0, origStart+dx);
+        clip.start = Math.round(ns/0.05)*0.05;
+      }
+      renderTracks();
+    }
+    function up(ev){
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      pushHistory();
+      renderTimeRuler();
+    }
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  });
+}
+
+/* zoom */
+function setZoom(px){
+  App.ui.pxPerSec = clamp(px, 20, 300);
+  renderTimeRuler(); renderTracks(); updatePlayheadUI();
+}
+
+/* ============================================================
+   5. Playhead / transport
+   ============================================================ */
+function updatePlayheadUI(){
+  const px = App.ui.pxPerSec;
+  $('#playhead').style.left = (TRACK_HEAD_W + App.playhead*px) + 'px';
+  $('#time-cur').textContent = fmtTime(App.playhead);
+}
+
+function stopAllSources(){
+  App.activeSources.forEach(s=>{ try{s.src.stop();}catch(e){} try{s.extra && s.extra.stop(App.ctxNow||0);}catch(e){} });
+  App.activeSources = [];
+}
+
+function schedulePlayback(){
+  const p = activeProject(); if(!p) return;
+  const ctx = Engine.context;
+  stopAllSources();
+  const startHead = App.playhead;
+  const ctxStart = ctx.currentTime + 0.05;
+  App.playStartCtxTime = ctxStart;
+  App.playStartHead = startHead;
+
+  const anySolo = p.tracks.some(t=>t.solo);
+
+  p.tracks.forEach(track=>{
+    if(track.muted) return;
+    if(anySolo && !track.solo) return;
+    track.clips.forEach(clip=>{
+      if(clip.muted) return;
+      const clipEnd = clip.start + clip.duration;
+      if(clipEnd <= startHead) return;
+      const buf = p.buffers[clip.bufferId];
+      if(!buf) return;
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const semis = clip.effects.pitchSemitones||0;
+      src.playbackRate.value = Math.pow(2, semis/12);
+
+      let when, offsetIntoClip, playDur;
+      if(clip.start >= startHead){
+        when = ctxStart + (clip.start-startHead);
+        offsetIntoClip = 0;
+      } else {
+        when = ctxStart;
+        offsetIntoClip = startHead-clip.start;
+      }
+      playDur = clip.duration - offsetIntoClip;
+      if(playDur<=0) return;
+      const bufferOffset = clip.offset + offsetIntoClip;
+
+      const extra = Engine.buildChain(ctx, src, clip, Engine.masterGain, when, clip.duration, track.volume||0);
+      try{
+        src.start(when, Math.max(0,bufferOffset), Math.max(0.01,playDur));
+      }catch(e){ /* guard against invalid offsets */ }
+      App.activeSources.push({src, extra});
+    });
+  });
+
+  App.isPlaying = true;
+  $('#play-icon').innerHTML = '<rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect>';
+  tickPlayhead();
+}
+
+function tickPlayhead(){
+  if(!App.isPlaying) return;
+  const ctx = Engine.context;
+  const elapsed = ctx.currentTime - App.playStartCtxTime;
+  App.playhead = App.playStartHead + Math.max(0,elapsed);
+  updatePlayheadUI();
+  const dur = projectDuration(activeProject());
+  if(App.playhead >= dur){
+    stopPlayback();
+    App.playhead = 0;
+    updatePlayheadUI();
+    return;
+  }
+  App.rafId = requestAnimationFrame(tickPlayhead);
+}
+
+function togglePlay(){
+  if(!activeProject()) return;
+  if(App.isPlaying){ pausePlayback(); } else { schedulePlayback(); }
+}
+function pausePlayback(){
+  App.isPlaying=false;
+  cancelAnimationFrame(App.rafId);
+  stopAllSources();
+  $('#play-icon').innerHTML = '<path d="M6 4l14 8-14 8z"></path>';
+}
+function stopPlayback(){
+  pausePlayback();
+  App.playhead = 0;
+  updatePlayheadUI();
+}
+function rewind(){
+  App.playhead = 0;
+  updatePlayheadUI();
+  if(App.isPlaying) schedulePlayback();
+}
+
+/* ============================================================
+   6. Panels (side sheets)
+   ============================================================ */
+const PANEL_IDS = ['edit','fx','ai','export'];
+function hideAllPanels(){
+  PANEL_IDS.forEach(id=>$('#panel-'+id).classList.remove('open'));
+  $('#overlay').classList.remove('show');
+  $$('#screen-editor .navbtn').forEach(b=>b.classList.remove('active'));
+}
+function openPanel(id){
+  hideAllPanels();
+  const panel = $('#panel-'+id);
+  panel.classList.remove('left'); panel.classList.remove('right');
+  panel.classList.add(App.ui.panelSide);
+  panel.classList.add('open');
+  $('#overlay').classList.add('show');
+  const nav = $(`#screen-editor .navbtn[data-panel="${id}"]`);
+  if(nav) nav.classList.add('active');
+  if(id==='edit') renderEditPanel();
+  if(id==='fx') renderFxPanel();
+  if(id==='export') renderExportPanel();
+}
+$('#overlay').addEventListener('click', hideAllPanels);
+$$('.panel-close').forEach(b=>b.addEventListener('click', hideAllPanels));
+
+$$('#screen-editor .navbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const which = btn.dataset.panel;
+    if(which==='record'){ openRecordModal(); return; }
+    openPanel(which);
+  });
+});
+$('#btn-settings').addEventListener('click', ()=> goToTopScreen('customize'));
+$('#btn-quicklight').addEventListener('click', toggleLightDark);
+
+/* ---- edit panel ---- */
+function selectedClip(){
+  const p = activeProject(); if(!p) return null;
+  for(const t of p.tracks){ const c = t.clips.find(c=>c.id===App.selectedClipId); if(c) return {clip:c, track:t}; }
+  return null;
+}
+function renderEditPanel(){
+  const sel = selectedClip();
+  $('#edit-actions-group').style.display = sel ? 'block':'none';
+  $('#edit-volume-group').style.display = sel ? 'block':'none';
+  $('#edit-clip-info').textContent = sel ? `選択中: ${sel.clip.name} (${sel.clip.duration.toFixed(2)}s)` : 'タイムライン上のクリップをタップして選択してください。';
+  if(sel){
+    const fx = sel.clip.effects;
+    $('#v-gain').value = fx.gain; $('#v-gain-val').textContent = fx.gain+' dB';
+    $('#v-fadein').value = fx.fadeIn; $('#v-fin-val').textContent = fx.fadeIn.toFixed(1)+'s';
+    $('#v-fadeout').value = fx.fadeOut; $('#v-fout-val').textContent = fx.fadeOut.toFixed(1)+'s';
+    $('#v-pan').value = fx.pan; $('#v-pan-val').textContent = fx.pan===0?'中央':(fx.pan<0?'L'+Math.abs(Math.round(fx.pan*100)):'R'+Math.round(fx.pan*100));
+  }
+}
+['v-gain','v-fadein','v-fadeout','v-pan'].forEach(id=>{
+  $('#'+id).addEventListener('input', ()=>{
+    const sel = selectedClip(); if(!sel) return;
+    const fx = sel.clip.effects;
+    fx.gain = parseFloat($('#v-gain').value);
+    fx.fadeIn = parseFloat($('#v-fadein').value);
+    fx.fadeOut = parseFloat($('#v-fadeout').value);
+    fx.pan = parseFloat($('#v-pan').value);
+    renderEditPanel();
+  });
+  $('#'+id).addEventListener('change', pushHistory);
+});
+$('#act-split').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  const {clip, track} = sel;
+  const t = App.playhead;
+  if(t<=clip.start || t>=clip.start+clip.duration){ showToast('再生ヘッドをクリップ内に置いてください'); return; }
+  const secondDur = clip.start+clip.duration-t;
+  const c2 = newClip(clip.bufferId, t, secondDur, clip.offset+(t-clip.start), clip.name, clip.color);
+  c2.effects = JSON.parse(JSON.stringify(clip.effects));
+  clip.duration = t-clip.start;
+  track.clips.push(c2);
+  App.selectedClipId = c2.id;
+  renderTracks(); renderEditPanel(); pushHistory();
+  showToast('分割しました');
+});
+$('#act-copy').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  App.clipboard = JSON.parse(JSON.stringify(sel.clip));
+  showToast('コピーしました');
+});
+$('#act-paste').addEventListener('click', ()=>{
+  if(!App.clipboard){ showToast('クリップボードが空です'); return; }
+  const sel = selectedClip();
+  const track = sel ? sel.track : activeProject().tracks[0];
+  if(track.locked){ showToast('このトラックはロックされています'); return; }
+  const c = JSON.parse(JSON.stringify(App.clipboard));
+  c.id = uid('clip'); c.start = App.playhead;
+  track.clips.push(c);
+  App.selectedClipId = c.id;
+  renderTracks(); pushHistory();
+  showToast('貼り付けました');
+});
+$('#act-duplicate').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  const c = JSON.parse(JSON.stringify(sel.clip));
+  c.id = uid('clip'); c.start = sel.clip.start+sel.clip.duration;
+  sel.track.clips.push(c);
+  App.selectedClipId = c.id;
+  renderTracks(); pushHistory();
+  showToast('複製しました');
+});
+$('#act-mute').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  sel.clip.muted = !sel.clip.muted;
+  renderTracks(); pushHistory();
+});
+$('#act-normalize').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  const p = activeProject();
+  const buf = p.buffers[sel.clip.bufferId];
+  if(!buf){ showToast('音声データが見つかりません'); return; }
+  const startSample = Math.max(0, Math.floor(sel.clip.offset*buf.sampleRate));
+  const endSample = Math.min(buf.length, Math.floor((sel.clip.offset+sel.clip.duration)*buf.sampleRate));
+  let peak = 0.0001;
+  for(let ch=0; ch<buf.numberOfChannels; ch++){
+    const data = buf.getChannelData(ch);
+    for(let i=startSample; i<endSample; i+=8){ const v=Math.abs(data[i]); if(v>peak) peak=v; }
+  }
+  const peakDb = 20*Math.log10(peak);
+  const targetDb = -1;
+  sel.clip.effects.gain = clamp(Math.round((targetDb - peakDb)*10)/10, -24, 12);
+  renderEditPanel(); pushHistory();
+  showToast('音量を正規化しました');
+});
+$('#act-delete').addEventListener('click', deleteSelectedClip);
+function deleteSelectedClip(){
+  const sel = selectedClip(); if(!sel) return;
+  sel.track.clips = sel.track.clips.filter(c=>c.id!==sel.clip.id);
+  App.selectedClipId = null;
+  renderTracks(); renderEditPanel(); renderFxPanel(); pushHistory();
+  showToast('削除しました');
+}
+$('#btn-undo').addEventListener('click', undo);
+$('#btn-redo').addEventListener('click', redo);
+
+/* ---- fx panel ---- */
+const FX_SLIDER_MAP = [
+  ['fx-pitch','pitchSemitones', v=>v+' 半音'],
+  ['fx-low','eqLow', v=>v+' dB'],
+  ['fx-mid','eqMid', v=>v+' dB'],
+  ['fx-high','eqHigh', v=>v+' dB'],
+  ['fx-reverb','reverbAmount', v=>v+'%'],
+  ['fx-dtime','delayTime', v=>parseFloat(v).toFixed(2)+'s'],
+  ['fx-dfb','delayFeedback', v=>v+'%'],
+  ['fx-dmix','delayMix', v=>v+'%'],
+  ['fx-dist','distortion', v=>v+'%'],
+  ['fx-trem','tremoloDepth', v=>v+'%'],
+  ['fx-ring','ringMod', v=>v+'%'],
+];
+function renderFxPanel(){
+  const sel = selectedClip();
+  $('#fx-noclip').style.display = sel ? 'none':'block';
+  $('#fx-controls').style.display = sel ? 'block':'none';
+  renderPresetGrid();
+  if(!sel) return;
+  const fx = sel.clip.effects;
+  FX_SLIDER_MAP.forEach(([id,key,fmt])=>{
+    $('#'+id).value = fx[key];
+    $('#'+id+'-val').textContent = fmt(fx[key]);
+  });
+  $$('#fx-reverb-size .chip').forEach(c=>c.classList.toggle('on', c.dataset.size===fx.reverbSize));
+  const nr = fx.noiseReduction || {type:'off',amount:40};
+  $$('#fx-nr-type .chip').forEach(c=>c.classList.toggle('on', c.dataset.type===nr.type));
+  $('#fx-nr-amount').value = nr.amount;
+  $('#fx-nr-amount-val').textContent = nr.amount+'%';
+}
+FX_SLIDER_MAP.forEach(([id,key,fmt])=>{
+  $('#'+id).addEventListener('input', ()=>{
+    const sel = selectedClip(); if(!sel) return;
+    sel.clip.effects[key] = parseFloat($('#'+id).value);
+    $('#'+id+'-val').textContent = fmt(sel.clip.effects[key]);
+  });
+  $('#'+id).addEventListener('change', pushHistory);
+});
+$$('#fx-reverb-size .chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    const sel = selectedClip(); if(!sel) return;
+    sel.clip.effects.reverbSize = chip.dataset.size;
+    $$('#fx-reverb-size .chip').forEach(c=>c.classList.toggle('on', c===chip));
+    pushHistory();
+  });
+});
+$$('#fx-nr-type .chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    const sel = selectedClip(); if(!sel) return;
+    if(!sel.clip.effects.noiseReduction) sel.clip.effects.noiseReduction = {type:'off',amount:40};
+    sel.clip.effects.noiseReduction.type = chip.dataset.type;
+    $$('#fx-nr-type .chip').forEach(c=>c.classList.toggle('on', c===chip));
+    pushHistory();
+    showToast('ノイズ除去: ' + chip.textContent);
+  });
+});
+$('#fx-nr-amount').addEventListener('input', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  if(!sel.clip.effects.noiseReduction) sel.clip.effects.noiseReduction = {type:'off',amount:40};
+  sel.clip.effects.noiseReduction.amount = parseFloat($('#fx-nr-amount').value);
+  $('#fx-nr-amount-val').textContent = sel.clip.effects.noiseReduction.amount+'%';
+});
+$('#fx-nr-amount').addEventListener('change', pushHistory);
+$('#fx-reset').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel) return;
+  sel.clip.effects = defaultEffects();
+  renderFxPanel(); renderEditPanel(); pushHistory();
+  showToast('エフェクトをリセットしました');
+});
+
+/* voice presets (built-in) */
+const PRESETS = [
+  {name:'カワボ', emoji:'🎀', fx:{pitchSemitones:5, eqHigh:4, reverbAmount:12, reverbSize:'small'}},
+  {name:'イケボ', emoji:'😎', fx:{pitchSemitones:-3, eqLow:3, reverbAmount:15, reverbSize:'small'}},
+  {name:'VTuber', emoji:'🌟', fx:{pitchSemitones:2, eqHigh:3, reverbAmount:10, delayMix:6, delayTime:0.12}},
+  {name:'ロボット', emoji:'🤖', fx:{ringMod:60, eqMid:-4, distortion:8}},
+  {name:'AI音声', emoji:'🧠', fx:{ringMod:15, eqHigh:5, reverbAmount:8}},
+  {name:'悪魔', emoji:'😈', fx:{pitchSemitones:-7, distortion:35, reverbAmount:25, reverbSize:'large'}},
+  {name:'天使', emoji:'😇', fx:{pitchSemitones:4, reverbAmount:40, reverbSize:'large', eqHigh:3}},
+  {name:'子供', emoji:'🧒', fx:{pitchSemitones:6, eqHigh:2}},
+  {name:'おじいさん', emoji:'👴', fx:{pitchSemitones:-4, eqLow:2, eqHigh:-3, distortion:5}},
+  {name:'おばあさん', emoji:'👵', fx:{pitchSemitones:-2, eqHigh:-4, reverbAmount:5}},
+  {name:'アニメ主人公', emoji:'⚡', fx:{pitchSemitones:3, eqHigh:4, reverbAmount:8}},
+  {name:'ラスボス', emoji:'👹', fx:{pitchSemitones:-9, distortion:45, reverbAmount:30, reverbSize:'large'}},
+  {name:'ラジオDJ', emoji:'🎙', fx:{eqLow:4, eqMid:2, highpass:120, lowpass:9000, distortion:6}},
+  {name:'電話', emoji:'☎', fx:{highpass:400, lowpass:2800, distortion:10}},
+  {name:'無線', emoji:'📻', fx:{highpass:500, lowpass:3200, distortion:22, tremoloDepth:8}},
+  {name:'メガホン', emoji:'📣', fx:{highpass:600, lowpass:3400, distortion:30, eqMid:6}},
+  {name:'洞窟', emoji:'🕳', fx:{reverbAmount:55, reverbSize:'large', eqHigh:-3}},
+  {name:'教会', emoji:'⛪', fx:{reverbAmount:60, reverbSize:'large'}},
+  {name:'ライブ会場', emoji:'🎤', fx:{reverbAmount:35, reverbSize:'medium', delayMix:10, delayTime:0.18}},
+  {name:'水中', emoji:'🌊', fx:{lowpass:800, tremoloDepth:35, pitchSemitones:-1}},
+  {name:'ホラー', emoji:'👻', fx:{pitchSemitones:-6, reverbAmount:35, reverbSize:'large', distortion:15, tremoloDepth:10}},
+  {name:'VHS風', emoji:'📼', fx:{highpass:100, lowpass:6000, distortion:12, tremoloDepth:6}},
+  {name:'レトロゲーム', emoji:'🕹', fx:{distortion:50, lowpass:5000, eqMid:6}},
+  {name:'Lo-Fi', emoji:'📀', fx:{lowpass:4500, distortion:8, eqLow:2}},
+  {name:'ASMR', emoji:'🎧', fx:{eqHigh:6, reverbAmount:10, reverbSize:'small'}},
+  {name:'ポッドキャスト', emoji:'🎙', fx:{eqLow:2, eqMid:1, highpass:80}},
+  {name:'ナレーション', emoji:'📖', fx:{eqLow:1, eqHigh:2, reverbAmount:6}},
+  {name:'ボーカル強化', emoji:'🎵', fx:{eqHigh:3, eqLow:2, reverbAmount:10}},
+  {name:'ハモリ', emoji:'🎶', fx:{delayMix:35, delayTime:0.02, delayFeedback:0, pitchSemitones:4}},
+  {name:'完全カスタム', emoji:'🎛', fx:{}},
+];
+function renderPresetGrid(){
+  const grid = $('#preset-grid');
+  if(!grid) return;
+  grid.innerHTML='';
+  const all = PRESETS.map(p=>({name:p.name, emoji:p.emoji, fx:p.fx, custom:false}))
+    .concat(App.customPresets.map(c=>({name:c.name, emoji:c.emoji, fx:c.effects, custom:true})));
+  all.forEach(preset=>{
+    const card = document.createElement('div');
+    card.className='preset-card';
+    card.innerHTML = `${preset.custom?'<div class="badge-my">MY</div>':''}<div class="pemoji">${preset.emoji}</div><div class="pname"></div>`;
+    card.querySelector('.pname').textContent = preset.name;
+    card.addEventListener('click', ()=>{
+      const sel = selectedClip();
+      if(!sel){ showToast('先にクリップを選択してください'); return; }
+      sel.clip.effects = Object.assign(defaultEffects(), JSON.parse(JSON.stringify(preset.fx)));
+      renderFxPanel(); renderEditPanel(); pushHistory();
+      showToast(`「${preset.name}」を適用しました`);
+    });
+    grid.appendChild(card);
+  });
+}
+renderPresetGrid();
+
+/* ---- AI panel ---- */
+let aiScenario = null;
+$$('.ai-scenario').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    aiScenario = el.dataset.scenario;
+    $$('.ai-scenario').forEach(x=>x.classList.toggle('on', x===el));
+    updateAiApplyBtn();
+  });
+});
+function updateAiApplyBtn(){
+  const sel = selectedClip();
+  const btn = $('#ai-apply');
+  if(!sel){ btn.disabled=true; btn.textContent='クリップを選択してください'; return; }
+  if(!aiScenario){ btn.disabled=true; btn.textContent='シーンを選んでください'; return; }
+  btn.disabled=false; btn.textContent='このクリップに適用';
+}
+const AI_SCENES = {
+  commentary:{eqLow:-1, eqMid:3, eqHigh:2, highpass:90},
+  song:{reverbAmount:14, reverbSize:'small', eqHigh:2},
+  stream:{eqMid:2, highpass:110, distortion:0},
+  meeting:{eqMid:4, highpass:150, lowpass:9000},
+  asmr:{eqHigh:6, reverbAmount:8, reverbSize:'small'},
+};
+$('#ai-apply').addEventListener('click', ()=>{
+  const sel = selectedClip(); if(!sel || !aiScenario) return;
+  Object.assign(sel.clip.effects, AI_SCENES[aiScenario]);
+  sel.clip.effects.noiseReduction = { type:'standard', amount: parseFloat($('#ai-gate').value)*-1>40?60:40 };
+  renderFxPanel(); renderEditPanel(); pushHistory();
+  showToast('AIおすすめ設定を適用しました');
+});
+
+/* ---- export panel ---- */
+function renderExportPanel(){
+  const p = activeProject(); if(!p) return;
+  const list = $('#export-track-list');
+  list.innerHTML='';
+  p.tracks.forEach(t=>{
+    const row = document.createElement('div');
+    row.className='chip' + (t.muted?'':' on');
+    row.style.marginBottom='8px'; row.style.width='100%'; row.style.textAlign='left'; row.style.boxSizing='border-box';
+    row.textContent = (t.muted?'🔇 ':'🔊 ') + t.name + ` (${t.clips.length} クリップ / ${t.volume||0}dB)`;
+    list.appendChild(row);
+  });
+}
+let exportFmt = 'wav';
+$$('.export-fmt .chip').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    exportFmt = c.dataset.fmt;
+    $$('.export-fmt .chip').forEach(x=>x.classList.toggle('on', x===c));
+  });
+});
+
+function audioBufferToWav(buffer){
+  const numCh = buffer.numberOfChannels;
+  const len = buffer.length * numCh * 2 + 44;
+  const arrBuf = new ArrayBuffer(len);
+  const view = new DataView(arrBuf);
+  const writeStr = (o,s)=>{ for(let i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); };
+  writeStr(0,'RIFF'); view.setUint32(4, len-8, true); writeStr(8,'WAVE');
+  writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22, numCh, true); view.setUint32(24, buffer.sampleRate, true);
+  view.setUint32(28, buffer.sampleRate*numCh*2, true); view.setUint16(32, numCh*2, true); view.setUint16(34,16,true);
+  writeStr(36,'data'); view.setUint32(40, len-44, true);
+  let offset = 44;
+  const chans = []; for(let i=0;i<numCh;i++) chans.push(buffer.getChannelData(i));
+  for(let i=0;i<buffer.length;i++){
+    for(let ch=0; ch<numCh; ch++){
+      let s = clamp(chans[ch][i],-1,1);
+      s = s<0 ? s*0x8000 : s*0x7FFF;
+      view.setInt16(offset, s, true); offset+=2;
+    }
+  }
+  return arrBuf;
+}
+
+async function exportProject(){
+  const p = activeProject(); if(!p) return;
+  const dur = projectDuration(p) + 0.3;
+  const sampleRate = 44100;
+  const offlineCtx = new OfflineAudioContext(2, Math.ceil(dur*sampleRate), sampleRate);
+  const master = offlineCtx.createGain(); master.connect(offlineCtx.destination);
+
+  const anySolo = p.tracks.some(t=>t.solo);
+  const extras = [];
+  p.tracks.forEach(track=>{
+    if(track.muted) return;
+    if(anySolo && !track.solo) return;
+    track.clips.forEach(clip=>{
+      if(clip.muted) return;
+      const buf = p.buffers[clip.bufferId]; if(!buf) return;
+      const src = offlineCtx.createBufferSource();
+      src.buffer = buf;
+      const semis = clip.effects.pitchSemitones||0;
+      src.playbackRate.value = Math.pow(2, semis/12);
+      const extra = Engine.buildChain(offlineCtx, src, clip, master, clip.start, clip.duration, track.volume||0);
+      try{ src.start(clip.start, clip.offset, clip.duration); }catch(e){}
+      extras.push(extra);
+    });
+  });
+
+  $('#export-progress').textContent = '書き出し中…';
+  $('#btn-export').disabled = true;
+  try{
+    const rendered = await offlineCtx.startRendering();
+    let blob, filename;
+    if(exportFmt==='wav'){
+      const wavBuf = audioBufferToWav(rendered);
+      blob = new Blob([wavBuf], {type:'audio/wav'});
+      filename = (p.name||'voice-studio') + '.wav';
+    } else {
+      const wavBuf = audioBufferToWav(rendered);
+      blob = new Blob([wavBuf], {type:'audio/wav'});
+      filename = (p.name||'voice-studio') + '.wav';
+      showToast('WebM書き出しは簡易対応のためWAVで出力しました');
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    $('#export-progress').textContent = '✅ 書き出し完了：' + filename;
+    showToast('書き出しが完了しました');
+  }catch(err){
+    console.error(err);
+    $('#export-progress').textContent = '書き出しに失敗しました: ' + err.message;
+  }finally{
+    $('#btn-export').disabled = false;
+  }
+}
+$('#btn-export').addEventListener('click', exportProject);
+
+/* ============================================================
+   7. Recording
+   ============================================================ */
+let mediaRecorder = null, recChunks = [], recStream = null, recTimerInt = null, recSeconds = 0, recording=false;
+
+function openRecordModal(){
+  if(!activeProject()) createProject();
+  $('#modal-record').classList.add('show');
+  $('#rec-timer').textContent='00:00';
+  $('#rec-toggle').textContent='録音開始';
+  $('#rec-target').textContent = 'Voice トラックに録音します';
+  recording=false;
+}
+$('#rec-cancel').addEventListener('click', ()=>{
+  stopRecordingStream();
+  $('#modal-record').classList.remove('show');
+});
+$('#rec-toggle').addEventListener('click', async ()=>{
+  if(!recording){ await startRecording(); } else { finishRecording(); }
+});
+async function startRecording(){
+  try{
+    recStream = await navigator.mediaDevices.getUserMedia({audio:true});
+  }catch(err){
+    showToast('マイクにアクセスできませんでした');
+    return;
+  }
+  recChunks = [];
+  mediaRecorder = new MediaRecorder(recStream);
+  mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) recChunks.push(e.data); };
+  mediaRecorder.start();
+  recording = true;
+  recSeconds = 0;
+  $('#rec-toggle').textContent='録音停止';
+  $('#rec-toggle').classList.add('stop');
+  recTimerInt = setInterval(()=>{
+    recSeconds++;
+    const m = String(Math.floor(recSeconds/60)).padStart(2,'0');
+    const s = String(recSeconds%60).padStart(2,'0');
+    $('#rec-timer').textContent = m+':'+s;
+  }, 1000);
+}
+function stopRecordingStream(){
+  clearInterval(recTimerInt);
+  if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  if(recStream) recStream.getTracks().forEach(t=>t.stop());
+  recording=false;
+}
+function finishRecording(){
+  clearInterval(recTimerInt);
+  if(!mediaRecorder) return;
+  mediaRecorder.onstop = async ()=>{
+    const blob = new Blob(recChunks, {type: mediaRecorder.mimeType || 'audio/webm'});
+    const arrBuf = await blob.arrayBuffer();
+    try{
+      const audioBuf = await Engine.decodeArrayBuffer(arrBuf);
+      addClipFromBuffer(audioBuf, '録音 ' + new Date().toLocaleTimeString(), 'voice');
+      showToast('録音をVoiceトラックに追加しました（ライブラリにも保存）');
+    }catch(err){
+      showToast('録音の読み込みに失敗しました');
+    }
+    $('#modal-record').classList.remove('show');
+  };
+  mediaRecorder.stop();
+  if(recStream) recStream.getTracks().forEach(t=>t.stop());
+  recording=false;
+}
+
+/* ============================================================
+   8. Import file / Library / drag&drop
+   ============================================================ */
+$('#home-record').addEventListener('click', ()=>{ if(!activeProject()) createProject(); openRecordModal(); });
+$('#home-open').addEventListener('click', ()=>{ if(!activeProject()) createProject(); $('#file-input').click(); });
+$('#home-new').addEventListener('click', createProject);
+$('#fab-new').addEventListener('click', createProject);
+$('#open-cmdk-home').addEventListener('click', openCmdk);
+$('#btn-back').addEventListener('click', goHome);
+$('#save-chip').addEventListener('click', ()=>saveProject(false));
+
+$('#file-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const arrBuf = await file.arrayBuffer();
+    const audioBuf = await Engine.decodeArrayBuffer(arrBuf);
+    addClipFromBuffer(audioBuf, file.name.replace(/\.[^.]+$/,''), 'voice');
+    showToast('読み込みました：' + file.name);
+  }catch(err){
+    showToast('この形式のファイルは読み込めませんでした');
+  }
+  e.target.value='';
+});
+
+function addToLibrary(buf, name){
+  App.library.push({id:uid('lib'), name, buffer:buf, duration:buf.duration, addedAt:Date.now()});
+}
+
+function addClipFromBuffer(audioBuf, name, trackType){
+  const p = activeProject(); if(!p) return;
+  const bufferId = uid('buf');
+  p.buffers[bufferId] = audioBuf;
+  let track = p.tracks.find(t=>t.type===trackType) || p.tracks[0];
+  const clip = newClip(bufferId, App.playhead, audioBuf.duration, 0, name, track.color);
+  track.clips.push(clip);
+  App.selectedClipId = clip.id;
+  addToLibrary(audioBuf, name);
+  renderTracks(); renderTimeRuler(); renderEditPanel(); renderFxPanel();
+  pushHistory();
+}
+
+/* drag & drop audio files directly onto the timeline */
+const timelineWrap = $('#timeline-wrap');
+const dz2 = $('#dropzone-hint2');
+let dragCounter = 0;
+timelineWrap.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+timelineWrap.addEventListener('dragenter', (e)=>{ e.preventDefault(); dragCounter++; dz2.classList.add('show'); });
+timelineWrap.addEventListener('dragleave', ()=>{ dragCounter=Math.max(0,dragCounter-1); if(dragCounter===0) dz2.classList.remove('show'); });
+timelineWrap.addEventListener('drop', async (e)=>{
+  e.preventDefault(); dragCounter=0; dz2.classList.remove('show');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!file || !file.type.startsWith('audio')){ showToast('音声ファイルをドロップしてください'); return; }
+  try{
+    const arrBuf = await file.arrayBuffer();
+    const audioBuf = await Engine.decodeArrayBuffer(arrBuf);
+    addClipFromBuffer(audioBuf, file.name.replace(/\.[^.]+$/,''), 'voice');
+    showToast('ドロップして読み込みました：'+file.name);
+  }catch(err){ showToast('読み込みに失敗しました'); }
+});
+
+/* ============================================================
+   9. Top-level screens: Library / Share / VoiceProj / Customize
+   ============================================================ */
+function goToTopScreen(name){
+  if($('#screen-editor').classList.contains('active')){
+    saveProject(true);
+    stopPlayback();
+    $('#screen-editor').classList.remove('active');
+  }
+  $('#global-bottom-nav').classList.remove('hidden');
+  switchTopScreen(name);
+}
+function switchTopScreen(name){
+  const map = {home:'#screen-home', library:'#screen-library', share:'#screen-share', voiceproj:'#screen-voiceproj', customize:'#screen-customize'};
+  Object.keys(map).forEach(k=>{
+    $(map[k]).classList.toggle('hidden', k!==name);
+  });
+  $$('#global-bottom-nav .navbtn').forEach(b=>b.classList.toggle('active', b.dataset.go===name));
+  if(name==='home') renderProjectList();
+  if(name==='library') renderLibrary();
+  if(name==='share') renderShare();
+  if(name==='voiceproj') renderVoiceProj();
+  if(name==='customize') { renderThemeGrid(); syncCustomizeControls(); }
+}
+$$('#global-bottom-nav .navbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=> goToTopScreen(btn.dataset.go));
+});
+
+/* ---- Library screen ---- */
+function renderLibrary(){
+  const wrap = $('#lib-list'); wrap.innerHTML='';
+  if(App.library.length===0){
+    wrap.innerHTML = `<div class="empty-state"><svg class="idle" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><b>ライブラリは空です</b><p>録音・読み込みした音声は自動でここに保存され、<br>どのプロジェクトからでも使えます。</p></div>`;
+    return;
+  }
+  App.library.slice().reverse().forEach(item=>{
+    const row = document.createElement('div');
+    row.className = 'project-row';
+    row.innerHTML = `<div class="project-thumb">🎵</div><div class="project-meta"><div class="pname"></div><div class="psub">${fmtTime(item.duration)}</div></div>`;
+    row.querySelector('.pname').textContent = item.name;
+    const useBtn = document.createElement('button');
+    useBtn.className = 'chip'; useBtn.style.marginRight='6px'; useBtn.textContent='使う';
+    useBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(!activeProject()) { const p=newProject('Untitled Project ' + (App.projects.length+1)); App.projects.push(p); App.activeProjectId=p.id; }
+      const p = activeProject();
+      const bufferId = uid('buf');
+      p.buffers[bufferId] = item.buffer;
+      const track = p.tracks.find(t=>t.type==='voice') || p.tracks[0];
+      const clip = newClip(bufferId, 0, item.buffer.duration, 0, item.name, track.color);
+      track.clips.push(clip);
+      openProject(p.id);
+      App.selectedClipId = clip.id;
+      renderTracks(); renderTimeRuler(); pushHistory();
+      showToast('プロジェクトに追加しました');
+    });
+    const delBtn = document.createElement('div');
+    delBtn.className='more'; delBtn.textContent='🗑';
+    delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); App.library = App.library.filter(x=>x.id!==item.id); renderLibrary(); });
+    row.appendChild(useBtn); row.appendChild(delBtn);
+    wrap.appendChild(row);
+  });
+}
+$('#lib-add').addEventListener('click', ()=> $('#lib-file-input').click());
+$('#lib-file-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  try{
+    const arrBuf = await file.arrayBuffer();
+    const audioBuf = await Engine.decodeArrayBuffer(arrBuf);
+    addToLibrary(audioBuf, file.name.replace(/\.[^.]+$/,''));
+    renderLibrary();
+    showToast('ライブラリに追加しました：'+file.name);
+  }catch(err){ showToast('この形式のファイルは読み込めませんでした'); }
+  e.target.value='';
+});
+
+/* ---- Share screen ---- */
+function renderShare(){
+  const wrap = $('#share-list'); wrap.innerHTML='';
+  PRESETS.filter(p=>p.name!=='完全カスタム').forEach(preset=>{
+    wrap.appendChild(shareCard(preset.emoji, preset.name, '公式テンプレート', ()=>{
+      if(App.customPresets.some(c=>c.name===preset.name)){ showToast('すでに追加されています'); return; }
+      App.customPresets.push({id:uid('preset'), name:preset.name, emoji:preset.emoji, effects:Object.assign(defaultEffects(), JSON.parse(JSON.stringify(preset.fx))), shared:true});
+      showToast(`「${preset.name}」をマイテンプレートに追加しました`);
+    }));
+  });
+  const mine = App.customPresets.filter(c=>!PRESETS.some(p=>p.name===c.name));
+  if(mine.length){
+    const label = document.createElement('div'); label.className='section-label'; label.style.padding='10px 0'; label.textContent='あなたのテンプレート';
+    wrap.appendChild(label);
+    mine.forEach(cp=>{
+      wrap.appendChild(shareCard(cp.emoji, cp.name, cp.shared ? '共有中':'非公開', null));
+    });
+  }
+}
+function shareCard(emoji,name,tag,onAdd){
+  const el = document.createElement('div'); el.className='share-card';
+  const atext = document.createElement('div'); atext.className='atext';
+  const b = document.createElement('b'); b.textContent = name;
+  const span = document.createElement('span'); span.textContent = tag;
+  atext.appendChild(b); atext.appendChild(span);
+  const emojiDiv = document.createElement('div'); emojiDiv.className='pemoji'; emojiDiv.textContent = emoji;
+  el.appendChild(emojiDiv); el.appendChild(atext);
+  const spacer = document.createElement('div'); spacer.className='spacer'; el.appendChild(spacer);
+  if(onAdd){ const btn=document.createElement('button'); btn.textContent='追加'; btn.addEventListener('click', ()=>{ onAdd(); renderShare(); }); el.appendChild(btn); }
+  return el;
+}
+
+/* ---- Voice adjustment project screen ---- */
+const VP_SLIDER_MAP = [
+  ['vp-pitch','pitchSemitones', v=>v+' 半音'],
+  ['vp-low','eqLow', v=>v+' dB'],
+  ['vp-mid','eqMid', v=>v+' dB'],
+  ['vp-high','eqHigh', v=>v+' dB'],
+  ['vp-reverb','reverbAmount', v=>v+'%'],
+  ['vp-dmix','delayMix', v=>v+'%'],
+  ['vp-dist','distortion', v=>v+'%'],
+  ['vp-trem','tremoloDepth', v=>v+'%'],
+  ['vp-ring','ringMod', v=>v+'%'],
+];
+let vpTemp = defaultEffects();
+function renderVoiceProj(){
+  const wrap = $('#vp-list'); wrap.innerHTML='';
+  $('#vp-editor').classList.remove('open');
+  App.vpEditingId = null;
+  if(App.customPresets.length===0){
+    wrap.innerHTML = `<div class="small-note" style="margin-bottom:14px;">まだ自作テンプレートがありません。右上の＋から作成しましょう。</div>`;
+    return;
+  }
+  App.customPresets.slice().reverse().forEach(cp=>{
+    const el = document.createElement('div'); el.className='vp-card';
+    const emojiDiv = document.createElement('div'); emojiDiv.className='pemoji'; emojiDiv.textContent=cp.emoji;
+    const atext = document.createElement('div'); atext.className='atext';
+    const b = document.createElement('b'); b.textContent = cp.name;
+    const span = document.createElement('span'); span.textContent = cp.shared?'共有中':'マイテンプレート';
+    atext.appendChild(b); atext.appendChild(span);
+    const btns = document.createElement('div'); btns.className='vpbtns';
+    const editBtn = document.createElement('div'); editBtn.className='chip'; editBtn.textContent='編集';
+    editBtn.addEventListener('click', ()=>openVpEditor(cp));
+    const shareBtn = document.createElement('div'); shareBtn.className='chip'; shareBtn.textContent = cp.shared?'共有解除':'共有';
+    shareBtn.addEventListener('click', ()=>{ cp.shared=!cp.shared; renderVoiceProj(); });
+    const delBtn = document.createElement('div'); delBtn.className='chip'; delBtn.style.color='var(--danger)'; delBtn.style.borderColor='var(--danger)'; delBtn.textContent='削除';
+    delBtn.addEventListener('click', ()=>{ if(confirm(`「${cp.name}」を削除しますか？`)){ App.customPresets = App.customPresets.filter(x=>x.id!==cp.id); renderVoiceProj(); } });
+    btns.appendChild(editBtn); btns.appendChild(shareBtn); btns.appendChild(delBtn);
+    el.appendChild(emojiDiv); el.appendChild(atext); el.appendChild(btns);
+    wrap.appendChild(el);
+  });
+}
+function openVpEditor(existing){
+  App.vpEditingId = existing ? existing.id : null;
+  vpTemp = existing ? JSON.parse(JSON.stringify(existing.effects)) : defaultEffects();
+  $('#vp-name').value = existing ? existing.name : '';
+  $('#vp-emoji').value = existing ? existing.emoji : '🎛';
+  VP_SLIDER_MAP.forEach(([id,key,fmt])=>{
+    $('#'+id).value = vpTemp[key]||0;
+    $('#'+id+'-val').textContent = fmt(vpTemp[key]||0);
+  });
+  const nr = vpTemp.noiseReduction || {type:'off',amount:40};
+  $$('#vp-nr-type .chip').forEach(c=>c.classList.toggle('on', c.dataset.type===nr.type));
+  $('#vp-editor').classList.add('open');
+  $('#vp-editor').scrollIntoView({behavior:'smooth', block:'start'});
+}
+$('#vp-new-btn').addEventListener('click', ()=>openVpEditor(null));
+$('#vp-cancel').addEventListener('click', ()=>{ $('#vp-editor').classList.remove('open'); });
+VP_SLIDER_MAP.forEach(([id,key,fmt])=>{
+  $('#'+id).addEventListener('input', ()=>{
+    vpTemp[key] = parseFloat($('#'+id).value);
+    $('#'+id+'-val').textContent = fmt(vpTemp[key]);
+  });
+});
+$$('#vp-nr-type .chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    if(!vpTemp.noiseReduction) vpTemp.noiseReduction = {type:'off',amount:40};
+    vpTemp.noiseReduction.type = chip.dataset.type;
+    $$('#vp-nr-type .chip').forEach(c=>c.classList.toggle('on', c===chip));
+  });
+});
+$('#vp-save').addEventListener('click', ()=>{
+  const name = $('#vp-name').value.trim();
+  if(!name){ showToast('テンプレート名を入力してください'); return; }
+  const emoji = $('#vp-emoji').value.trim() || '🎛';
+  if(App.vpEditingId){
+    const cp = App.customPresets.find(c=>c.id===App.vpEditingId);
+    if(cp){ cp.name=name; cp.emoji=emoji; cp.effects=JSON.parse(JSON.stringify(vpTemp)); }
+    showToast('テンプレートを更新しました');
+  }else{
+    App.customPresets.push({id:uid('preset'), name, emoji, effects:JSON.parse(JSON.stringify(vpTemp)), shared:false});
+    showToast('テンプレートを保存しました');
+  }
+  $('#vp-editor').classList.remove('open');
+  renderVoiceProj();
+});
+
+/* ============================================================
+   10. Customize screen (theme, motion, layout)
+   ============================================================ */
+const THEMES = [
+  {id:'dark', label:'Dark', color:'#12151C'},
+  {id:'light', label:'Light', color:'#FFFFFF'},
+  {id:'oled', label:'OLED', color:'#000000'},
+  {id:'purple', label:'Purple', color:'#9B5CF6'},
+  {id:'blue', label:'Blue', color:'#3B82F6'},
+  {id:'red', label:'Red', color:'#EF4444'},
+  {id:'pink', label:'Pink', color:'#EC4899'},
+  {id:'green', label:'Green', color:'#22C55E'},
+  {id:'orange', label:'Orange', color:'#F97316'},
+];
+function applyTheme(id){
+  App.ui.theme = id;
+  document.documentElement.dataset.theme = id;
+  $('#quicklight-icon').innerHTML = (id==='light')
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+    : '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>';
+}
+function toggleLightDark(){
+  applyTheme(App.ui.theme==='light' ? 'dark' : 'light');
+  renderThemeGrid();
+  showToast(App.ui.theme==='light' ? 'ライトモードにしました' : 'ダークモードにしました');
+}
+function renderThemeGrid(){
+  const grid = $('#theme-grid'); if(!grid) return;
+  grid.innerHTML='';
+  THEMES.forEach(th=>{
+    const dot = document.createElement('div');
+    dot.className='theme-dot'+(App.ui.theme===th.id?' on':'');
+    dot.style.background = th.color;
+    dot.title = th.label;
+    dot.addEventListener('click', ()=>{ applyTheme(th.id); renderThemeGrid(); });
+    grid.appendChild(dot);
+  });
+  $('#mode-dark') && $('#mode-dark').classList.toggle('on', App.ui.theme==='dark' || !['light'].includes(App.ui.theme));
+  $('#mode-light') && $('#mode-light').classList.toggle('on', App.ui.theme==='light');
+}
+$('#mode-dark').addEventListener('click', ()=>{ applyTheme('dark'); renderThemeGrid(); });
+$('#mode-light').addEventListener('click', ()=>{ applyTheme('light'); renderThemeGrid(); showToast('ライトモードにしました'); });
+
+$('#switch-idlemotion').addEventListener('click', ()=>{
+  App.ui.idleMotion = !App.ui.idleMotion;
+  $('#switch-idlemotion').classList.toggle('on', App.ui.idleMotion);
+  document.body.classList.toggle('no-motion', !App.ui.idleMotion);
+});
+
+$('#set-iconsize').addEventListener('input', (e)=>{
+  document.documentElement.style.setProperty('--icon-size', e.target.value+'px');
+  App.ui.iconSize = parseInt(e.target.value,10);
+});
+$('#set-timelineheight').addEventListener('input', (e)=>{
+  App.ui.timelineHeight = parseInt(e.target.value,10);
+  renderTracks();
+});
+$('#set-wavecolor').addEventListener('input', (e)=>{
+  App.ui.waveColor = e.target.value;
+  document.documentElement.style.setProperty('--accent', e.target.value);
+  renderTracks();
+});
+$('#panelpos-right').addEventListener('click', ()=>{
+  App.ui.panelSide='right';
+  $('#panelpos-right').classList.add('on'); $('#panelpos-left').classList.remove('on');
+});
+$('#panelpos-left').addEventListener('click', ()=>{
+  App.ui.panelSide='left';
+  $('#panelpos-left').classList.add('on'); $('#panelpos-right').classList.remove('on');
+});
+$('#settings-search').addEventListener('input', (e)=>{
+  const q = e.target.value.trim();
+  $$('#screen-customize .fx-group[data-key]').forEach(g=>{
+    const match = !q || g.dataset.key.includes(q) || g.querySelector('h4').textContent.includes(q);
+    g.style.display = match ? '' : 'none';
+  });
+});
+function syncCustomizeControls(){
+  $('#set-iconsize').value = App.ui.iconSize;
+  $('#set-timelineheight').value = App.ui.timelineHeight;
+  $('#set-wavecolor').value = App.ui.waveColor;
+  $('#switch-idlemotion').classList.toggle('on', App.ui.idleMotion);
+  if(App.ui.panelSide==='left'){ $('#panelpos-left').classList.add('on'); $('#panelpos-right').classList.remove('on'); }
+  else{ $('#panelpos-right').classList.add('on'); $('#panelpos-left').classList.remove('on'); }
+}
+$('#pname-input').addEventListener('change', ()=>{
+  const p = activeProject(); if(!p) return;
+  p.name = $('#pname-input').value || 'Untitled';
+  renderTabbar();
+  markUnsaved();
+});
+
+/* ============================================================
+   11. Command palette
+   ============================================================ */
+function commandList(){
+  return [
+    {label:'録音する', kbd:'', run:()=>{ if(!activeProject()) createProject(); openRecordModal(); }},
+    {label:'ファイルを開く', kbd:'', run:()=>{ if(!activeProject()) createProject(); $('#file-input').click(); }},
+    {label:'新規プロジェクト', kbd:'⌘N', run:createProject},
+    {label:'再生 / 一時停止', kbd:'Space', run:togglePlay},
+    {label:'停止', kbd:'', run:stopPlayback},
+    {label:'クリップを分割', kbd:'S', run:()=>$('#act-split').click()},
+    {label:'クリップを削除', kbd:'Del', run:deleteSelectedClip},
+    {label:'元に戻す', kbd:'⌘Z', run:undo},
+    {label:'やり直す', kbd:'⌘⇧Z', run:redo},
+    {label:'保存してホームへ', kbd:'', run:goHome},
+    {label:'エフェクトを開く', kbd:'', run:()=>openPanel('fx')},
+    {label:'AIアシストを開く', kbd:'', run:()=>openPanel('ai')},
+    {label:'書き出し', kbd:'', run:()=>openPanel('export')},
+    {label:'ライブラリを開く', kbd:'', run:()=>goToTopScreen('library')},
+    {label:'テンプレート共有を開く', kbd:'', run:()=>goToTopScreen('share')},
+    {label:'音声調整プロジェクトを開く', kbd:'', run:()=>goToTopScreen('voiceproj')},
+    {label:'カスタマイズを開く', kbd:'', run:()=>goToTopScreen('customize')},
+    {label:'ライト/ダーク切替', kbd:'', run:toggleLightDark},
+    {label:'ズームイン', kbd:'', run:()=>setZoom(App.ui.pxPerSec+15)},
+    {label:'ズームアウト', kbd:'', run:()=>setZoom(App.ui.pxPerSec-15)},
+    {label:'ホームへ戻る', kbd:'', run:goHome},
+  ];
+}
+let cmdkSel = 0, cmdkItems = [];
+function openCmdk(){
+  $('#cmdk-overlay').classList.add('show');
+  $('#cmdk-input').value='';
+  cmdkSel = 0;
+  renderCmdk('');
+  setTimeout(()=>$('#cmdk-input').focus(), 30);
+}
+function closeCmdk(){ $('#cmdk-overlay').classList.remove('show'); }
+function renderCmdk(query){
+  const all = commandList();
+  cmdkItems = all.filter(c=>c.label.toLowerCase().includes(query.toLowerCase()));
+  const list = $('#cmdk-list'); list.innerHTML='';
+  cmdkItems.forEach((c,i)=>{
+    const el = document.createElement('div');
+    el.className='cmdk-item'+(i===cmdkSel?' sel':'');
+    el.innerHTML = `<span></span><span class="k"></span>`;
+    el.querySelector('span').textContent = c.label;
+    el.querySelector('.k').textContent = c.kbd;
+    el.addEventListener('click', ()=>{ c.run(); closeCmdk(); });
+    list.appendChild(el);
+  });
+}
+$('#cmdk-input').addEventListener('input', (e)=>{ cmdkSel=0; renderCmdk(e.target.value); });
+$('#cmdk-overlay').addEventListener('click', (e)=>{ if(e.target.id==='cmdk-overlay') closeCmdk(); });
+document.addEventListener('keydown', (e)=>{
+  const cmdk = $('#cmdk-overlay').classList.contains('show');
+  if(cmdk){
+    if(e.key==='Escape'){ closeCmdk(); }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); cmdkSel=Math.min(cmdkItems.length-1,cmdkSel+1); renderCmdk($('#cmdk-input').value); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); cmdkSel=Math.max(0,cmdkSel-1); renderCmdk($('#cmdk-input').value); }
+    else if(e.key==='Enter'){ if(cmdkItems[cmdkSel]){ cmdkItems[cmdkSel].run(); closeCmdk(); } }
+    return;
+  }
+  const mod = e.metaKey||e.ctrlKey;
+  if(mod && e.key.toLowerCase()==='k'){ e.preventDefault(); openCmdk(); return; }
+  if(!$('#screen-editor').classList.contains('active')) return;
+  const typing = document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+  if(typing) return;
+  if(e.code==='Space'){ e.preventDefault(); togglePlay(); }
+  else if(e.key.toLowerCase()==='s' && !mod){ $('#act-split').click(); }
+  else if(e.key==='Delete' || e.key==='Backspace'){ deleteSelectedClip(); }
+  else if(mod && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
+  else if(mod && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+  else if(mod && e.key.toLowerCase()==='c'){ $('#act-copy').click(); }
+  else if(mod && e.key.toLowerCase()==='v'){ $('#act-paste').click(); }
+});
+
+/* ============================================================
+   12. Transport buttons
+   ============================================================ */
+$('#btn-play').addEventListener('click', togglePlay);
+$('#btn-stop').addEventListener('click', stopPlayback);
+$('#btn-rewind').addEventListener('click', rewind);
+$('#zoom-in').addEventListener('click', ()=>setZoom(App.ui.pxPerSec+15));
+$('#zoom-out').addEventListener('click', ()=>setZoom(App.ui.pxPerSec-15));
+
+/* ============================================================
+   13. Init
+   ============================================================ */
+document.documentElement.dataset.theme = App.ui.theme;
+renderProjectList();
+renderThemeGrid();
+window.addEventListener('beforeunload', (e)=>{
+  if(App.projects.length){
+    e.preventDefault(); e.returnValue='';
+  }
+});
+
+})();
+</script>
+</body>
+</html>
