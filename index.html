@@ -412,7 +412,6 @@ input[type=range]::-moz-range-thumb{width:17px; height:17px; border-radius:50%; 
 
 /* generic scrim panel like settings/customize as bottom sheet on mobile-narrow */
 @media (max-width:520px){
-  .side-panel{width:100vw;}
   .track-head{width:112px;}
   .track-vol input[type=range]{width:44px;}
   .home-actions{flex-wrap:nowrap;}
@@ -425,6 +424,181 @@ input[type=file]{display:none;}
 .theme-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
 .theme-dot{width:100%; aspect-ratio:1; border-radius:50%; cursor:pointer; border:2px solid transparent; display:flex; align-items:center; justify-content:center;}
 .theme-dot.on{border-color:var(--text);}
+
+/* ============================================================
+   MOBILE MODE — single-column, thumb-first editing
+   ============================================================ */
+body.is-mobile #global-bottom-nav .navbtn span{font-size:9.5px;}
+body.is-mobile .side-panel.right,
+body.is-mobile .side-panel.left{
+  right:0; left:0; top:auto; bottom:0; width:100%;
+  max-height:82vh; border-radius:18px 18px 0 0; transform:translateY(100%);
+  border:1px solid var(--border); border-bottom:none;
+}
+body.is-mobile .side-panel.open{transform:translateY(0);}
+body.is-mobile .panel-header{position:relative; padding:10px 16px 12px;}
+body.is-mobile .panel-header::before{
+  content:''; position:absolute; top:6px; left:50%; transform:translateX(-50%);
+  width:36px; height:4px; border-radius:3px; background:var(--surface-3);
+}
+body.is-mobile .panel-header{padding-top:16px;}
+body.is-mobile .icon-btn, body.is-mobile .tmini{min-width:34px; min-height:34px;}
+body.is-mobile .clip .handle{width:22px;}
+body.is-mobile .tbtn{width:44px; height:44px;}
+
+/* mobile-only 4 tab bottom nav (AI folded into FX) */
+body.is-mobile .bottom-nav .navbtn[data-panel="ai"]{display:none;}
+
+/* fixed thumb-reachable record button */
+#mobile-record-fab{
+  display:none; position:absolute; z-index:15; right:16px; bottom:calc(var(--nav-h) + 78px);
+  width:60px; height:60px; border-radius:50%; border:none; cursor:pointer;
+  background:linear-gradient(155deg, var(--danger), #C22A3B);
+  box-shadow:0 10px 26px rgba(255,75,92,0.45); align-items:center; justify-content:center;
+}
+#mobile-record-fab svg{width:24px; height:24px; stroke:#fff; fill:#fff;}
+body.is-mobile #screen-editor.active ~ #mobile-record-fab,
+body.is-mobile #screen-editor.active #mobile-record-fab{display:flex;}
+
+/* prominent floating undo/redo */
+#float-undoredo{
+  display:none; position:absolute; z-index:15; left:16px; bottom:calc(var(--nav-h) + 78px);
+  gap:8px;
+}
+#float-undoredo button{
+  width:46px; height:46px; border-radius:50%; border:1px solid var(--border); background:var(--surface-2);
+  box-shadow:0 8px 20px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+#float-undoredo button svg{width:19px; height:19px; stroke:var(--text);}
+#float-undoredo button:active{transform:scale(.92);}
+#float-undoredo button:disabled{opacity:.35;}
+body.is-mobile #float-undoredo{display:flex;}
+
+/* selection bottom action bar */
+#selection-bar{
+  position:absolute; left:0; right:0; bottom:var(--nav-h); z-index:15; background:var(--surface);
+  border-top:1px solid var(--border-soft); display:none; align-items:stretch; box-shadow:0 -8px 20px rgba(0,0,0,.25);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));
+}
+#selection-bar.show{display:flex;}
+#selection-bar .sa-btn{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  padding:8px 2px; border:none; background:none; color:var(--text-dim); cursor:pointer; font-size:9.5px; font-weight:600; min-width:0;
+}
+#selection-bar .sa-btn span.ic{font-size:17px;}
+#selection-bar .sa-btn.danger{color:var(--danger);}
+#selection-bar .sa-count{
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff;
+  font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap;
+}
+
+/* long-press clip context menu */
+#clip-ctx-overlay{position:absolute; inset:0; background:rgba(0,0,0,.4); z-index:55; display:none;}
+#clip-ctx-overlay.show{display:block;}
+#clip-ctx-menu{
+  position:absolute; z-index:56; background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow-panel); overflow:hidden; min-width:170px; display:none;
+}
+#clip-ctx-menu.show{display:block;}
+#clip-ctx-menu .cm-item{
+  display:flex; align-items:center; gap:10px; padding:12px 16px; font-size:13.5px; cursor:pointer; color:var(--text);
+  border-bottom:1px solid var(--border-soft);
+}
+#clip-ctx-menu .cm-item:last-child{border-bottom:none;}
+#clip-ctx-menu .cm-item.danger{color:var(--danger);}
+#clip-ctx-menu .cm-item:active{background:var(--surface-3);}
+
+/* confirm sheet (bottom, for destructive/overwrite actions) */
+#confirm-overlay{position:absolute; inset:0; background:rgba(0,0,0,.5); z-index:80; display:none;}
+#confirm-overlay.show{display:block;}
+#confirm-sheet{
+  position:absolute; left:0; right:0; bottom:0; z-index:81; background:var(--surface-2); border:1px solid var(--border);
+  border-bottom:none; border-radius:18px 18px 0 0; padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));
+  transform:translateY(100%); transition:transform .22s cubic-bezier(.2,.8,.2,1);
+}
+#confirm-overlay.show #confirm-sheet{transform:translateY(0);}
+#confirm-sheet .cs-title{font-family:var(--font-display); font-weight:700; font-size:15.5px; margin-bottom:6px;}
+#confirm-sheet .cs-body{font-size:12.5px; color:var(--text-dim); line-height:1.6; margin-bottom:16px;}
+#confirm-sheet .cs-btns{display:flex; gap:10px;}
+#confirm-sheet .cs-btns button{flex:1; padding:13px; border-radius:12px; font-weight:700; font-size:13.5px; cursor:pointer; border:1px solid var(--border);}
+#confirm-sheet .cs-cancel{background:var(--surface-3); color:var(--text-dim);}
+#confirm-sheet .cs-ok{background:var(--danger); border-color:var(--danger); color:#fff;}
+#confirm-sheet .cs-ok.safe{background:var(--accent); border-color:var(--accent);}
+
+/* quick-undo toast (extends #toast) */
+#toast.with-action{display:flex; align-items:center; gap:12px; padding-right:8px;}
+#toast .toast-undo{background:var(--accent); color:#fff; border:none; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; flex:none;}
+
+/* history panel */
+.history-list{display:flex; flex-direction:column; gap:6px;}
+.history-item{
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:var(--surface-2);
+  border:1px solid var(--border-soft); cursor:pointer; font-size:12.5px;
+}
+.history-item.current{border-color:var(--accent); background:var(--accent-soft);}
+.history-item .hnum{
+  width:24px; height:24px; border-radius:50%; background:var(--surface-3); display:flex; align-items:center; justify-content:center;
+  font-size:10.5px; font-weight:700; color:var(--text-dim); flex:none;
+}
+.history-item.current .hnum{background:var(--accent); color:#fff;}
+.history-item .hmeta{flex:1;}
+.history-item .htime{font-size:10.5px; color:var(--text-faint);}
+
+/* take chips */
+.take-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+.take-chip{padding:8px 12px; border-radius:10px; background:var(--surface-2); border:1px solid var(--border); font-size:12px; cursor:pointer; display:flex; align-items:center; gap:6px;}
+.take-chip.active{border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:700;}
+.take-chip .tp{cursor:pointer;}
+
+/* fine-nudge stepper */
+.nudge-row{display:flex; align-items:center; gap:8px; margin-bottom:14px;}
+.nudge-row .nlabel{font-size:12.5px; color:var(--text-dim); flex:1;}
+.nudge-btn{width:34px; height:34px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:none;}
+.nudge-btn:active{background:var(--surface-3);}
+
+/* snap guide line on timeline */
+.snap-line{position:absolute; top:0; bottom:0; width:1px; background:var(--accent-2); z-index:7; pointer-events:none; display:none;}
+.snap-line.show{display:block;}
+
+/* range selection overlay across lane */
+.range-select{position:absolute; top:0; bottom:0; background:rgba(108,92,231,0.22); border-left:1.5px dashed var(--accent); border-right:1.5px dashed var(--accent); z-index:2; pointer-events:none;}
+
+/* count-in overlay */
+#countin-overlay{position:absolute; inset:0; z-index:90; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center;}
+#countin-overlay.show{display:flex;}
+#countin-num{font-family:var(--font-display); font-size:96px; font-weight:700; color:#fff; text-shadow:0 6px 30px rgba(0,0,0,.5);}
+
+/* onboarding tutorial */
+#tutorial-overlay{position:absolute; inset:0; z-index:95; background:rgba(6,8,12,.88); display:none; align-items:flex-end; justify-content:center;}
+#tutorial-overlay.show{display:flex;}
+#tutorial-card{
+  width:100%; max-width:480px; background:var(--surface-2); border:1px solid var(--border); border-radius:20px 20px 0 0;
+  padding:26px 22px calc(26px + env(safe-area-inset-bottom,0px)); box-shadow:var(--shadow-panel);
+}
+#tutorial-card .tstep-emoji{font-size:34px; margin-bottom:10px;}
+#tutorial-card .tstep-title{font-family:var(--font-display); font-weight:700; font-size:18px; margin-bottom:8px;}
+#tutorial-card .tstep-body{font-size:13.5px; color:var(--text-dim); line-height:1.65; margin-bottom:20px;}
+#tutorial-card .tstep-dots{display:flex; gap:6px; justify-content:center; margin-bottom:18px;}
+#tutorial-card .tstep-dots span{width:6px; height:6px; border-radius:50%; background:var(--surface-3);}
+#tutorial-card .tstep-dots span.on{background:var(--accent); width:18px; border-radius:3px;}
+#tutorial-card .tstep-btns{display:flex; gap:10px;}
+#tutorial-card .tstep-btns button{flex:1;}
+#tutorial-skip{background:none; border:none; color:var(--text-faint); font-size:12px; cursor:pointer; display:block; margin:0 auto 4px; text-decoration:underline;}
+
+/* crash-recovery banner */
+#recovery-banner{
+  position:absolute; left:12px; right:12px; top:12px; z-index:40; background:var(--surface-2); border:1px solid var(--accent);
+  border-radius:14px; padding:12px 14px; display:none; align-items:center; gap:10px; box-shadow:var(--shadow-panel);
+}
+#recovery-banner.show{display:flex;}
+#recovery-banner .rtext{flex:1; font-size:12.5px; line-height:1.5;}
+#recovery-banner .rtext b{display:block; font-size:13.5px; margin-bottom:2px;}
+#recovery-banner button{flex:none; font-size:11.5px; padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-3); cursor:pointer; font-weight:600;}
+#recovery-banner button.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+@media (max-width:520px){
+  .side-panel:not(.open){transform:translateY(100%) !important;}
+}
 </style>
 </head>
 <body>
@@ -650,6 +824,73 @@ input[type=file]{display:none;}
       <button class="navbtn" id="navbtn-record" data-panel="record"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0M12 19v3"/></svg><span>録音</span></button>
       <button class="navbtn" data-panel="ai"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 3h6l-1 4h-4z"/><circle cx="9" cy="13.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1.4" fill="currentColor" stroke="none"/></svg><span>AI</span></button>
       <button class="navbtn" data-panel="export"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 17v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>書き出し</span></button>
+    </div>
+  </div>
+
+  <!-- ============ MOBILE-ONLY FLOATING CONTROLS ============ -->
+  <button id="mobile-record-fab" title="録音（固定位置）">
+    <svg viewBox="0 0 24 24" stroke-width="0"><circle cx="12" cy="12" r="8"/></svg>
+  </button>
+  <div id="float-undoredo">
+    <button id="float-undo" title="元に戻す"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5v0A5.5 5.5 0 0 1 14.5 20H11"/></svg></button>
+    <button id="float-redo" title="やり直す"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg></button>
+  </div>
+
+  <!-- selection bottom action bar (mobile) -->
+  <div id="selection-bar">
+    <div class="sa-count" id="selection-count" style="display:none;"></div>
+    <button class="sa-btn" id="sa-split"><span class="ic">✂</span>分割</button>
+    <button class="sa-btn" id="sa-duplicate"><span class="ic">⧉</span>複製</button>
+    <button class="sa-btn" id="sa-mute"><span class="ic">🔇</span>ミュート</button>
+    <button class="sa-btn" id="sa-fx"><span class="ic">🎛</span>エフェクト</button>
+    <button class="sa-btn danger" id="sa-delete"><span class="ic">🗑</span>削除</button>
+  </div>
+
+  <!-- long-press clip context menu -->
+  <div id="clip-ctx-overlay"></div>
+  <div id="clip-ctx-menu">
+    <div class="cm-item" data-act="duplicate">⧉ 複製</div>
+    <div class="cm-item" data-act="split">✂ 再生位置で分割</div>
+    <div class="cm-item" data-act="mute">🔇 ミュート切替</div>
+    <div class="cm-item" data-act="normalize">📶 音量正規化</div>
+    <div class="cm-item" data-act="takes">🎚 別テイクを追加</div>
+    <div class="cm-item danger" data-act="delete">🗑 削除</div>
+  </div>
+
+  <!-- crash-recovery banner -->
+  <div id="recovery-banner">
+    <div class="rtext"><b>前回の作業を復元しますか？</b>前回のプロジェクト構成が見つかりました（音声データは端末保存の都合上、再度読み込みが必要な場合があります）。</div>
+    <button id="recovery-dismiss">今回は破棄</button>
+    <button class="primary" id="recovery-restore">復元する</button>
+  </div>
+
+  <!-- count-in overlay -->
+  <div id="countin-overlay"><div id="countin-num">3</div></div>
+
+  <!-- confirm sheet (destructive / overwrite confirmations) -->
+  <div id="confirm-overlay">
+    <div id="confirm-sheet">
+      <div class="cs-title" id="cs-title">確認</div>
+      <div class="cs-body" id="cs-body">この操作を実行しますか？</div>
+      <div class="cs-btns">
+        <button class="cs-cancel" id="cs-cancel">キャンセル</button>
+        <button class="cs-ok" id="cs-ok">実行する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- onboarding tutorial -->
+  <div id="tutorial-overlay">
+    <div id="tutorial-card">
+      <div class="tstep-emoji" id="tut-emoji">🎙</div>
+      <div class="tstep-title" id="tut-title">ようこそ Voice Studio へ</div>
+      <div class="tstep-body" id="tut-body">録音 → 編集 → やり直し → 書き出し、最短の流れを4ステップで紹介します。</div>
+      <div class="tstep-dots" id="tut-dots"></div>
+      <button id="tutorial-skip">スキップ</button>
+      <div class="tstep-btns">
+        <button class="ghost-btn" id="tut-back">戻る</button>
+        <button class="primary-btn" id="tut-next">次へ</button>
+      </div>
     </div>
   </div>
 
