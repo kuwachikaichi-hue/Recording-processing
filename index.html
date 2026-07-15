@@ -565,7 +565,6 @@ body.is-mobile #float-undoredo{display:flex;}
 
 /* count-in overlay */
 #countin-overlay{position:absolute; inset:0; z-index:90; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center;}
-#countin-overlay.show{display:flex;}
 #countin-num{font-family:var(--font-display); font-size:96px; font-weight:700; color:#fff; text-shadow:0 6px 30px rgba(0,0,0,.5);}
 
 /* onboarding tutorial */
@@ -599,10 +598,23 @@ body.is-mobile #float-undoredo{display:flex;}
 @media (max-width:520px){
   .side-panel:not(.open){transform:translateY(100%) !important;}
 }
+
+/* boot / persistence loading veil */
+#boot-veil{
+  position:absolute; inset:0; z-index:120; background:var(--bg); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:14px; transition:opacity .3s ease;
+}
+#boot-veil.hide{opacity:0; pointer-events:none;}
+#boot-veil .bv-text{font-size:12.5px; color:var(--text-faint);}
 </style>
 </head>
 <body>
 <div id="app">
+
+  <div id="boot-veil">
+    <div class="vs-mark idle"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h2l2-6 3 12 2-9 2 6h5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="bv-text" id="boot-veil-text">読み込み中…</div>
+  </div>
 
   <!-- ============ HOME SCREEN ============ -->
   <div id="screen-home">
@@ -779,6 +791,12 @@ body.is-mobile #float-undoredo{display:flex;}
         <div class="small-note">
           Space 再生/停止 ・ S 分割 ・ Delete 削除 ・ Ctrl/⌘+Z 戻す ・ Ctrl/⌘+Shift+Z やり直す ・ Ctrl/⌘+C / V コピー&貼り付け ・ Ctrl/⌘+K コマンドパレット
         </div>
+      </div>
+
+      <div class="fx-group" data-key="データ 保存 削除 リセット バックアップ">
+        <h4>保存データ</h4>
+        <div class="small-note" style="margin-bottom:10px;">プロジェクト・ライブラリ・テンプレート・表示設定は、このブラウザにこのタブを離れても自動的に保存されます。</div>
+        <button class="ghost-btn" id="btn-clear-all-data" style="color:var(--danger);border-color:var(--danger);">すべての保存データを消去</button>
       </div>
     </div>
   </div>
@@ -1342,6 +1360,203 @@ function projectDuration(p){
   return Math.max(end, 1);
 }
 
+/* ============================================================
+   2.5 Persistence (window.storage) — keeps data across reload / closed tabs
+   ============================================================ */
+const MAX_AUDIO_B64_BYTES = 4.3 * 1024 * 1024; // stay safely under the 5MB per-key storage limit
+
+function audioBufferToWav(buffer){
+  const numCh = buffer.numberOfChannels;
+  const len = buffer.length * numCh * 2 + 44;
+  const arrBuf = new ArrayBuffer(len);
+  const view = new DataView(arrBuf);
+  const writeStr = (o,s)=>{ for(let i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); };
+  writeStr(0,'RIFF'); view.setUint32(4, len-8, true); writeStr(8,'WAVE');
+  writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22, numCh, true); view.setUint32(24, buffer.sampleRate, true);
+  view.setUint32(28, buffer.sampleRate*numCh*2, true); view.setUint16(32, numCh*2, true); view.setUint16(34,16,true);
+  writeStr(36,'data'); view.setUint32(40, len-44, true);
+  let offset = 44;
+  const chans = []; for(let i=0;i<numCh;i++) chans.push(buffer.getChannelData(i));
+  for(let i=0;i<buffer.length;i++){
+    for(let ch=0; ch<numCh; ch++){
+      let s = clamp(chans[ch][i],-1,1);
+      s = s<0 ? s*0x8000 : s*0x7FFF;
+      view.setInt16(offset, s, true); offset+=2;
+    }
+  }
+  return arrBuf;
+}
+function bufferToBase64Wav(buffer){
+  const wavBuf = audioBufferToWav(buffer);
+  const bytes = new Uint8Array(wavBuf);
+  let binary = '';
+  const chunk = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
+  }
+  return btoa(binary);
+}
+async function base64WavToBuffer(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+  return await Engine.decodeArrayBuffer(bytes.buffer);
+}
+async function safeStorageGet(key){
+  try{ return await window.storage.get(key, false); }catch(e){ return null; }
+}
+async function safeStorageSet(key, value){
+  try{ return await window.storage.set(key, value, false); }catch(e){ console.error('storage set failed', key, e); return null; }
+}
+async function safeStorageDelete(key){
+  try{ return await window.storage.delete(key, false); }catch(e){ return null; }
+}
+
+const Persist = {
+  ready: false,
+  saveTimer: null,
+  saving: false,
+  queueSave(){
+    if(!this.ready) return; // don't stomp on storage before initial load finishes
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(()=>{ this.saveAll(); }, 800);
+  },
+  async saveAll(){
+    if(this.saving) { this.queueSave(); return; }
+    this.saving = true;
+    const chip = $('#save-chip-text');
+    try{
+      await safeStorageSet('app-ui', JSON.stringify(App.ui));
+      await safeStorageSet('app-presets', JSON.stringify(App.customPresets));
+
+      const libIndex = App.library.map(l=>({id:l.id, name:l.name, duration:l.duration, addedAt:l.addedAt}));
+      await safeStorageSet('app-library-index', JSON.stringify(libIndex));
+      for(const item of App.library){
+        if(item._saved) continue;
+        try{
+          const b64 = bufferToBase64Wav(item.buffer);
+          if(b64.length > MAX_AUDIO_B64_BYTES){
+            console.warn('library item too large to persist:', item.name);
+            item._saved = true; // don't retry every save cycle
+            continue;
+          }
+          await safeStorageSet('lib-audio:'+item.id, b64);
+          item._saved = true;
+        }catch(e){ console.error(e); }
+      }
+
+      const projIndex = App.projects.map(p=>({id:p.id, name:p.name, createdAt:p.createdAt}));
+      await safeStorageSet('app-projects-index', JSON.stringify(projIndex));
+      for(const p of App.projects){
+        const tracks = p.tracks.map(t=>({
+          id:t.id, name:t.name, type:t.type, color:t.color, muted:t.muted, solo:t.solo, locked:t.locked, volume:t.volume,
+          clips:t.clips.map(c=>({ id:c.id, bufferId:c.bufferId, start:c.start, duration:c.duration, offset:c.offset, name:c.name, color:c.color, muted:c.muted, effects:c.effects }))
+        }));
+        const bufferIds = Object.keys(p.buffers);
+        await safeStorageSet('project:'+p.id, JSON.stringify({id:p.id, name:p.name, createdAt:p.createdAt, tracks, bufferIds}));
+        p._savedBufs = p._savedBufs || {};
+        for(const bufId of bufferIds){
+          if(p._savedBufs[bufId]) continue;
+          try{
+            const b64 = bufferToBase64Wav(p.buffers[bufId]);
+            if(b64.length > MAX_AUDIO_B64_BYTES){
+              console.warn('clip audio too large to persist in project', p.name);
+              p._savedBufs[bufId] = true;
+              continue;
+            }
+            await safeStorageSet('project-audio:'+p.id+':'+bufId, b64);
+            p._savedBufs[bufId] = true;
+          }catch(e){ console.error(e); }
+        }
+      }
+      if(chip) chip.textContent = '保存済み';
+      $('#save-chip') && $('#save-chip').classList.remove('saving');
+      unsavedChanges = false;
+    }catch(err){
+      console.error('Persist.saveAll failed', err);
+    }finally{
+      this.saving = false;
+    }
+  },
+  async deleteProject(proj){
+    try{
+      await safeStorageDelete('project:'+proj.id);
+      for(const bufId of Object.keys(proj.buffers||{})){
+        await safeStorageDelete('project-audio:'+proj.id+':'+bufId);
+      }
+    }catch(e){ console.error(e); }
+    this.queueSave();
+  },
+  async deleteLibraryItem(item){
+    try{ await safeStorageDelete('lib-audio:'+item.id); }catch(e){}
+    this.queueSave();
+  },
+  async clearAll(){
+    try{
+      for(const p of App.projects) await this.deleteProject(p);
+      for(const l of App.library) await this.deleteLibraryItem(l);
+      await safeStorageDelete('app-ui');
+      await safeStorageDelete('app-presets');
+      await safeStorageDelete('app-library-index');
+      await safeStorageDelete('app-projects-index');
+    }catch(e){ console.error(e); }
+  },
+  async loadAll(){
+    const setBootText = (t)=>{ const el=$('#boot-veil-text'); if(el) el.textContent = t; };
+    try{
+      setBootText('設定を読み込み中…');
+      const ui = await safeStorageGet('app-ui');
+      if(ui){ try{ Object.assign(App.ui, JSON.parse(ui.value)); }catch(e){} }
+
+      const presets = await safeStorageGet('app-presets');
+      if(presets){ try{ App.customPresets = JSON.parse(presets.value); }catch(e){} }
+
+      setBootText('ライブラリを読み込み中…');
+      const libIdx = await safeStorageGet('app-library-index');
+      if(libIdx){
+        let items = [];
+        try{ items = JSON.parse(libIdx.value); }catch(e){}
+        for(const it of items){
+          const audio = await safeStorageGet('lib-audio:'+it.id);
+          if(!audio) continue;
+          try{
+            const buf = await base64WavToBuffer(audio.value);
+            App.library.push({id:it.id, name:it.name, buffer:buf, duration:it.duration, addedAt:it.addedAt, _saved:true});
+          }catch(e){ console.error('failed to decode library item', it.name, e); }
+        }
+      }
+
+      setBootText('プロジェクトを読み込み中…');
+      const projIdx = await safeStorageGet('app-projects-index');
+      if(projIdx){
+        let items = [];
+        try{ items = JSON.parse(projIdx.value); }catch(e){}
+        for(const it of items){
+          const pdata = await safeStorageGet('project:'+it.id);
+          if(!pdata) continue;
+          let parsed;
+          try{ parsed = JSON.parse(pdata.value); }catch(e){ continue; }
+          const proj = { id:parsed.id, name:parsed.name, createdAt:parsed.createdAt, buffers:{}, tracks:parsed.tracks||[], _savedBufs:{} };
+          for(const bufId of parsed.bufferIds||[]){
+            const audio = await safeStorageGet('project-audio:'+parsed.id+':'+bufId);
+            if(!audio) continue;
+            try{
+              proj.buffers[bufId] = await base64WavToBuffer(audio.value);
+              proj._savedBufs[bufId] = true;
+            }catch(e){ console.error('failed to decode project audio', parsed.name, e); }
+          }
+          App.projects.push(proj);
+        }
+      }
+    }catch(err){
+      console.error('Persist.loadAll failed', err);
+    }finally{
+      this.ready = true;
+    }
+  }
+};
+
 /* ---------------- history (undo/redo) ---------------- */
 function snapshotClips(p){
   return p.tracks.map(t=>({
@@ -1383,17 +1598,15 @@ let unsavedChanges = false;
 function markUnsaved(){
   unsavedChanges = true;
   const chip = $('#save-chip-text');
-  if(chip){ chip.textContent = '未保存の変更あり'; }
+  if(chip){ chip.textContent = '保存中…'; }
   $('#save-chip') && $('#save-chip').classList.add('saving');
+  Persist.queueSave();
 }
 function saveProject(silent){
   const p = activeProject();
   if(p){
-    unsavedChanges = false;
-    const chip = $('#save-chip-text');
-    if(chip) chip.textContent = '保存済み';
-    $('#save-chip') && $('#save-chip').classList.remove('saving');
     if(!silent) showToast('プロジェクトを保存しました');
+    Persist.saveAll();
   }
 }
 
@@ -1427,6 +1640,7 @@ function renderProjectList(){
       e.stopPropagation();
       if(confirm(`「${p.name}」を削除しますか？`)){
         App.projects = App.projects.filter(x=>x.id!==p.id);
+        Persist.deleteProject(p);
         renderProjectList();
       }
     });
@@ -1466,6 +1680,7 @@ function goHome(){
 function createProject(){
   const p = newProject('Untitled Project ' + (App.projects.length+1));
   App.projects.push(p);
+  Persist.queueSave();
   openProject(p.id);
   showToast('新規プロジェクトを作成しました');
 }
@@ -1483,6 +1698,7 @@ function renderTabbar(){
       if(e.target.classList.contains('x')){
         e.stopPropagation();
         App.projects = App.projects.filter(x=>x.id!==p.id);
+        Persist.deleteProject(p);
         if(App.projects.length){ openProject(App.projects[0].id); } else { goHome(); }
         return;
       }
@@ -1575,9 +1791,9 @@ function renderTracks(){
     if(track.muted) mBtn.classList.add('on');
     if(track.solo) sBtn.classList.add('on');
     if(track.locked) lBtn.classList.add('on');
-    mBtn.addEventListener('click', ()=>{ track.muted=!track.muted; renderTracks(); });
-    sBtn.addEventListener('click', ()=>{ track.solo=!track.solo; renderTracks(); });
-    lBtn.addEventListener('click', ()=>{ track.locked=!track.locked; renderTracks(); });
+    mBtn.addEventListener('click', ()=>{ track.muted=!track.muted; renderTracks(); markUnsaved(); });
+    sBtn.addEventListener('click', ()=>{ track.solo=!track.solo; renderTracks(); markUnsaved(); });
+    lBtn.addEventListener('click', ()=>{ track.locked=!track.locked; renderTracks(); markUnsaved(); });
     volEl.addEventListener('input', ()=>{ track.volume = parseFloat(volEl.value); markUnsaved(); });
     row.appendChild(head);
 
@@ -2097,29 +2313,6 @@ $$('.export-fmt .chip').forEach(c=>{
   });
 });
 
-function audioBufferToWav(buffer){
-  const numCh = buffer.numberOfChannels;
-  const len = buffer.length * numCh * 2 + 44;
-  const arrBuf = new ArrayBuffer(len);
-  const view = new DataView(arrBuf);
-  const writeStr = (o,s)=>{ for(let i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); };
-  writeStr(0,'RIFF'); view.setUint32(4, len-8, true); writeStr(8,'WAVE');
-  writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
-  view.setUint16(22, numCh, true); view.setUint32(24, buffer.sampleRate, true);
-  view.setUint32(28, buffer.sampleRate*numCh*2, true); view.setUint16(32, numCh*2, true); view.setUint16(34,16,true);
-  writeStr(36,'data'); view.setUint32(40, len-44, true);
-  let offset = 44;
-  const chans = []; for(let i=0;i<numCh;i++) chans.push(buffer.getChannelData(i));
-  for(let i=0;i<buffer.length;i++){
-    for(let ch=0; ch<numCh; ch++){
-      let s = clamp(chans[ch][i],-1,1);
-      s = s<0 ? s*0x8000 : s*0x7FFF;
-      view.setInt16(offset, s, true); offset+=2;
-    }
-  }
-  return arrBuf;
-}
-
 async function exportProject(){
   const p = activeProject(); if(!p) return;
   const dur = projectDuration(p) + 0.3;
@@ -2271,6 +2464,7 @@ $('#file-input').addEventListener('change', async (e)=>{
 
 function addToLibrary(buf, name){
   App.library.push({id:uid('lib'), name, buffer:buf, duration:buf.duration, addedAt:Date.now()});
+  Persist.queueSave();
 }
 
 function addClipFromBuffer(audioBuf, name, trackType){
@@ -2363,7 +2557,7 @@ function renderLibrary(){
     });
     const delBtn = document.createElement('div');
     delBtn.className='more'; delBtn.textContent='🗑';
-    delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); App.library = App.library.filter(x=>x.id!==item.id); renderLibrary(); });
+    delBtn.addEventListener('click', (e)=>{ e.stopPropagation(); App.library = App.library.filter(x=>x.id!==item.id); Persist.deleteLibraryItem(item); renderLibrary(); });
     row.appendChild(useBtn); row.appendChild(delBtn);
     wrap.appendChild(row);
   });
@@ -2388,6 +2582,7 @@ function renderShare(){
     wrap.appendChild(shareCard(preset.emoji, preset.name, '公式テンプレート', ()=>{
       if(App.customPresets.some(c=>c.name===preset.name)){ showToast('すでに追加されています'); return; }
       App.customPresets.push({id:uid('preset'), name:preset.name, emoji:preset.emoji, effects:Object.assign(defaultEffects(), JSON.parse(JSON.stringify(preset.fx))), shared:true});
+      Persist.queueSave();
       showToast(`「${preset.name}」をマイテンプレートに追加しました`);
     }));
   });
@@ -2445,9 +2640,9 @@ function renderVoiceProj(){
     const editBtn = document.createElement('div'); editBtn.className='chip'; editBtn.textContent='編集';
     editBtn.addEventListener('click', ()=>openVpEditor(cp));
     const shareBtn = document.createElement('div'); shareBtn.className='chip'; shareBtn.textContent = cp.shared?'共有解除':'共有';
-    shareBtn.addEventListener('click', ()=>{ cp.shared=!cp.shared; renderVoiceProj(); });
+    shareBtn.addEventListener('click', ()=>{ cp.shared=!cp.shared; Persist.queueSave(); renderVoiceProj(); });
     const delBtn = document.createElement('div'); delBtn.className='chip'; delBtn.style.color='var(--danger)'; delBtn.style.borderColor='var(--danger)'; delBtn.textContent='削除';
-    delBtn.addEventListener('click', ()=>{ if(confirm(`「${cp.name}」を削除しますか？`)){ App.customPresets = App.customPresets.filter(x=>x.id!==cp.id); renderVoiceProj(); } });
+    delBtn.addEventListener('click', ()=>{ if(confirm(`「${cp.name}」を削除しますか？`)){ App.customPresets = App.customPresets.filter(x=>x.id!==cp.id); Persist.queueSave(); renderVoiceProj(); } });
     btns.appendChild(editBtn); btns.appendChild(shareBtn); btns.appendChild(delBtn);
     el.appendChild(emojiDiv); el.appendChild(atext); el.appendChild(btns);
     wrap.appendChild(el);
@@ -2494,6 +2689,7 @@ $('#vp-save').addEventListener('click', ()=>{
     App.customPresets.push({id:uid('preset'), name, emoji, effects:JSON.parse(JSON.stringify(vpTemp)), shared:false});
     showToast('テンプレートを保存しました');
   }
+  Persist.queueSave();
   $('#vp-editor').classList.remove('open');
   renderVoiceProj();
 });
@@ -2522,6 +2718,7 @@ function applyTheme(id){
 function toggleLightDark(){
   applyTheme(App.ui.theme==='light' ? 'dark' : 'light');
   renderThemeGrid();
+  Persist.queueSave();
   showToast(App.ui.theme==='light' ? 'ライトモードにしました' : 'ダークモードにしました');
 }
 function renderThemeGrid(){
@@ -2532,41 +2729,47 @@ function renderThemeGrid(){
     dot.className='theme-dot'+(App.ui.theme===th.id?' on':'');
     dot.style.background = th.color;
     dot.title = th.label;
-    dot.addEventListener('click', ()=>{ applyTheme(th.id); renderThemeGrid(); });
+    dot.addEventListener('click', ()=>{ applyTheme(th.id); renderThemeGrid(); Persist.queueSave(); });
     grid.appendChild(dot);
   });
   $('#mode-dark') && $('#mode-dark').classList.toggle('on', App.ui.theme==='dark' || !['light'].includes(App.ui.theme));
   $('#mode-light') && $('#mode-light').classList.toggle('on', App.ui.theme==='light');
 }
-$('#mode-dark').addEventListener('click', ()=>{ applyTheme('dark'); renderThemeGrid(); });
-$('#mode-light').addEventListener('click', ()=>{ applyTheme('light'); renderThemeGrid(); showToast('ライトモードにしました'); });
+$('#mode-dark').addEventListener('click', ()=>{ applyTheme('dark'); renderThemeGrid(); Persist.queueSave(); });
+$('#mode-light').addEventListener('click', ()=>{ applyTheme('light'); renderThemeGrid(); Persist.queueSave(); showToast('ライトモードにしました'); });
 
 $('#switch-idlemotion').addEventListener('click', ()=>{
   App.ui.idleMotion = !App.ui.idleMotion;
   $('#switch-idlemotion').classList.toggle('on', App.ui.idleMotion);
   document.body.classList.toggle('no-motion', !App.ui.idleMotion);
+  Persist.queueSave();
 });
 
 $('#set-iconsize').addEventListener('input', (e)=>{
   document.documentElement.style.setProperty('--icon-size', e.target.value+'px');
   App.ui.iconSize = parseInt(e.target.value,10);
+  Persist.queueSave();
 });
 $('#set-timelineheight').addEventListener('input', (e)=>{
   App.ui.timelineHeight = parseInt(e.target.value,10);
   renderTracks();
+  Persist.queueSave();
 });
 $('#set-wavecolor').addEventListener('input', (e)=>{
   App.ui.waveColor = e.target.value;
   document.documentElement.style.setProperty('--accent', e.target.value);
   renderTracks();
+  Persist.queueSave();
 });
 $('#panelpos-right').addEventListener('click', ()=>{
   App.ui.panelSide='right';
   $('#panelpos-right').classList.add('on'); $('#panelpos-left').classList.remove('on');
+  Persist.queueSave();
 });
 $('#panelpos-left').addEventListener('click', ()=>{
   App.ui.panelSide='left';
   $('#panelpos-left').classList.add('on'); $('#panelpos-right').classList.remove('on');
+  Persist.queueSave();
 });
 $('#settings-search').addEventListener('input', (e)=>{
   const q = e.target.value.trim();
@@ -2574,6 +2777,23 @@ $('#settings-search').addEventListener('input', (e)=>{
     const match = !q || g.dataset.key.includes(q) || g.querySelector('h4').textContent.includes(q);
     g.style.display = match ? '' : 'none';
   });
+});
+$('#btn-clear-all-data').addEventListener('click', async ()=>{
+  if(!confirm('保存されているプロジェクト・ライブラリ・テンプレート・設定をすべて消去します。この操作は取り消せません。よろしいですか？')) return;
+  await Persist.clearAll();
+  App.projects = [];
+  App.library = [];
+  App.customPresets = [];
+  App.activeProjectId = null;
+  App.ui = { theme:'dark', iconSize:22, timelineHeight:96, waveColor:'#6C5CE7', panelSide:'right', pxPerSec:60, idleMotion:true };
+  applyTheme('dark');
+  document.documentElement.style.setProperty('--icon-size', App.ui.iconSize+'px');
+  document.documentElement.style.setProperty('--accent', App.ui.waveColor);
+  document.body.classList.remove('no-motion');
+  renderProjectList();
+  renderThemeGrid();
+  syncCustomizeControls();
+  showToast('保存データを消去しました');
 });
 function syncCustomizeControls(){
   $('#set-iconsize').value = App.ui.iconSize;
@@ -2676,15 +2896,35 @@ $('#zoom-in').addEventListener('click', ()=>setZoom(App.ui.pxPerSec+15));
 $('#zoom-out').addEventListener('click', ()=>setZoom(App.ui.pxPerSec-15));
 
 /* ============================================================
-   13. Init
+   13. Init — load persisted data first, then render
    ============================================================ */
 document.documentElement.dataset.theme = App.ui.theme;
-renderProjectList();
-renderThemeGrid();
-window.addEventListener('beforeunload', (e)=>{
-  if(App.projects.length){
-    e.preventDefault(); e.returnValue='';
+
+(async function bootstrap(){
+  try{
+    await Persist.loadAll();
+  }catch(e){
+    console.error('bootstrap load failed', e);
   }
+  // apply loaded ui state
+  applyTheme(App.ui.theme);
+  document.documentElement.style.setProperty('--icon-size', App.ui.iconSize+'px');
+  document.documentElement.style.setProperty('--accent', App.ui.waveColor);
+  document.body.classList.toggle('no-motion', !App.ui.idleMotion);
+  if(App.projects.length && !App.activeProjectId){
+    // don't auto-open an editor; just land on home with restored list
+  }
+  renderProjectList();
+  renderThemeGrid();
+  const veil = $('#boot-veil');
+  if(veil){ veil.classList.add('hide'); setTimeout(()=>veil.remove(), 350); }
+  if(App.projects.length || App.library.length || App.customPresets.length){
+    showToast('前回のデータを復元しました');
+  }
+})();
+
+window.addEventListener('beforeunload', (e)=>{
+  // Data is auto-saved to persistent storage, so no unload confirmation is needed.
 });
 
 })();
